@@ -21,7 +21,7 @@
                 <div class="spinner mr-3"></div>加载中...
             </div>
             <div id="topology-content" class="hidden">
-                <div id="topology-legend" class="flex items-center gap-6 mb-6 text-sm">
+                <div id="topology-legend" class="flex items-center gap-6 mb-4 text-sm">
                     <div class="flex items-center">
                         <div class="w-4 h-4 rounded-full bg-emerald-500 mr-2"></div>
                         <span>QOS</span>
@@ -35,7 +35,7 @@
                         <span>用户</span>
                     </div>
                 </div>
-                <div id="topology-container" class="overflow-x-auto"></div>
+                <div id="topology-container" class="overflow-auto" style="min-height: 500px; position: relative;"></div>
             </div>
         </div>
     </div>
@@ -57,11 +57,6 @@ async function checkUserStatus() {
         
         window.currentUserType = data.user_type;
         window.currentUsername = data.username;
-        
-        const adminElements = document.querySelectorAll('.admin-only');
-        if (data.user_type !== 'admin') {
-            adminElements.forEach(el => el.style.display = 'none');
-        }
     } catch (e) {
         console.error('检查用户状态失败:', e);
     }
@@ -86,7 +81,7 @@ async function loadTopologyData() {
     }
 }
 
-// 渲染组织拓扑图
+// 渲染组织拓扑图 - 使用 SVG 曲线连接
 function renderTopology(data) {
     const container = document.getElementById('topology-container');
     container.innerHTML = '';
@@ -98,113 +93,196 @@ function renderTopology(data) {
         return;
     }
     
-    // 收集所有关联的用户
-    const accountUsersMap = {};
-    data.accounts.forEach(a => {
-        accountUsersMap[a.name] = data.users.filter(u => {
-            return data.links.some(l => l.from === 'account' && l.from_name === a.name && l.to === 'user' && l.to_name === u.name);
-        });
+    const nodeWidth = 220;
+    const nodeHeight = 120;
+    const gapX = 40;
+    const gapY = 80;
+    const qosY = 60;
+    const accountY = 280;
+    const userY = 480;
+    
+    // 计算布局
+    const totalWidth = Math.max(
+        (data.qos?.length || 0) * (nodeWidth + gapX),
+        (data.accounts?.length || 0) * (nodeWidth + gapX),
+        (data.users?.length || 0) * (nodeWidth + gapX)
+    ) + 100;
+    
+    const svgHeight = 600;
+    
+    // 生成节点位置映射
+    const positions = {};
+    
+    // QOS 节点位置
+    const qosStartX = (totalWidth - ((data.qos?.length || 0) * (nodeWidth + gapX))) / 2 + 50;
+    (data.qos || []).forEach((q, i) => {
+        positions['qos:' + q.name] = {
+            x: qosStartX + i * (nodeWidth + gapX),
+            y: qosY,
+            type: 'qos',
+            data: q
+        };
     });
     
-    // QOS 关联的账户
-    const qosAccountsMap = {};
-    data.qos.forEach(q => {
-        qosAccountsMap[q.name] = data.accounts.filter(a => {
-            return data.links.some(l => l.from === 'qos' && l.from_name === q.name && l.to === 'account' && l.to_name === a.name);
-        });
+    // 账户节点位置
+    const accountStartX = (totalWidth - ((data.accounts?.length || 0) * (nodeWidth + gapX))) / 2 + 50;
+    (data.accounts || []).forEach((a, i) => {
+        positions['account:' + a.name] = {
+            x: accountStartX + i * (nodeWidth + gapX),
+            y: accountY,
+            type: 'account',
+            data: a
+        };
     });
     
-    // 渲染
-    let html = '<div class="flex flex-col items-center">';
+    // 用户节点位置
+    const userStartX = (totalWidth - ((data.users?.length || 0) * (nodeWidth + gapX))) / 2 + 50;
+    (data.users || []).forEach((u, i) => {
+        positions['user:' + u.name] = {
+            x: userStartX + i * (nodeWidth + gapX),
+            y: userY,
+            type: 'user',
+            data: u
+        };
+    });
     
-    // QOS 层
-    if (data.qos && data.qos.length > 0) {
-        html += '<div class="flex flex-wrap justify-center gap-4 mb-6">';
-        data.qos.forEach(q => {
-            const linkedAccounts = qosAccountsMap[q.name] || [];
-            html += renderQOSNode(q, linkedAccounts);
-        });
-        html += '</div>';
-        
-        if (data.accounts && data.accounts.length > 0) {
-            html += '<div class="flex justify-center mb-4"><i class="fas fa-arrow-down text-slate-400 text-xl"></i></div>';
+    // 生成 SVG 连接线
+    let svgHtml = `<svg width="${totalWidth}" height="${svgHeight}" style="position: absolute; top: 0; left: 0; pointer-events: none; z-index: 1;">`;
+    
+    // QOS -> Account 连接线
+    data.links.filter(l => l.from === 'qos').forEach(link => {
+        const fromPos = positions['qos:' + link.from_name];
+        const toPos = positions['account:' + link.to_name];
+        if (fromPos && toPos) {
+            svgHtml += createCurve(fromPos.x + nodeWidth/2, fromPos.y + nodeHeight, toPos.x + nodeWidth/2, toPos.y, '#10b981');
         }
-    }
+    });
     
-    // 账户层
-    if (data.accounts && data.accounts.length > 0) {
-        html += '<div class="flex flex-wrap justify-center gap-4 mb-6">';
-        data.accounts.forEach(a => {
-            const linkedUsers = accountUsersMap[a.name] || [];
-            html += renderAccountNode(a, linkedUsers);
-        });
-        html += '</div>';
-    }
+    // Account -> User 连接线
+    data.links.filter(l => l.from === 'account').forEach(link => {
+        const fromPos = positions['account:' + link.from_name];
+        const toPos = positions['user:' + link.to_name];
+        if (fromPos && toPos) {
+            svgHtml += createCurve(fromPos.x + nodeWidth/2, fromPos.y + nodeHeight, toPos.x + nodeWidth/2, toPos.y, '#3b82f6');
+        }
+    });
     
-    html += '</div>';
-    container.innerHTML = html;
+    svgHtml += '</svg>';
+    
+    // 生成节点 HTML
+    let nodesHtml = '<div style="position: relative; width: ' + totalWidth + 'px; height: ' + svgHeight + 'px; z-index: 2;">';
+    
+    // QOS 节点
+    (data.qos || []).forEach(q => {
+        const pos = positions['qos:' + q.name];
+        nodesHtml += renderNodeHTML(pos.x, pos.y, 'qos', q, data.accounts || [], data, positions);
+    });
+    
+    // 账户节点
+    (data.accounts || []).forEach(a => {
+        const pos = positions['account:' + a.name];
+        nodesHtml += renderAccountNodeHTML(pos.x, pos.y, a, data.users || [], data, positions);
+    });
+    
+    // 用户节点
+    (data.users || []).forEach(u => {
+        const pos = positions['user:' + u.name];
+        nodesHtml += renderUserNodeHTML(pos.x, pos.y, u);
+    });
+    
+    nodesHtml += '</div>';
+    
+    container.innerHTML = svgHtml + nodesHtml;
 }
 
-// 渲染 QOS 节点
-function renderQOSNode(q, accounts) {
-    const quotaHtml = formatQuotaInfo(q);
+// 创建贝塞尔曲线
+function createCurve(x1, y1, x2, y2, color) {
+    const midY = (y1 + y2) / 2;
+    const ctrlOffset = Math.min(80, Math.abs(y2 - y1) * 0.3);
+    return `<path d="M ${x1} ${y1} C ${x1} ${y1 + ctrlOffset}, ${x2} ${y2 - ctrlOffset}, ${x2} ${y2}" 
+            stroke="${color}" stroke-width="2" fill="none" stroke-dasharray="5,5" opacity="0.6"/>`;
+}
+
+// 渲染 QOS 节点 HTML
+function renderNodeHTML(x, y, type, data, linkedAccounts, allData, positions) {
+    const quotaHtml = formatQuotaInfo(data);
     
-    let childrenHtml = '';
-    if (accounts.length > 0) {
-        childrenHtml = '<div class="mt-4 pt-3 border-t border-slate-200">';
-        childrenHtml += '<div class="text-xs text-slate-500 mb-2">关联账户:</div>';
-        childrenHtml += '<div class="flex flex-wrap gap-1">';
-        accounts.forEach(a => {
-            childrenHtml += `<span class="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">${escapeHtml(a.name)}</span>`;
+    let linkedHtml = '';
+    if (linkedAccounts.length > 0) {
+        linkedHtml = `<div class="mt-3 pt-2 border-t border-emerald-200">
+            <div class="text-xs text-emerald-600 mb-1">→ 关联账户:</div>
+            <div class="flex flex-wrap gap-1">`;
+        linkedAccounts.forEach(a => {
+            linkedHtml += `<span class="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">${escapeHtml(a.name)}</span>`;
         });
-        childrenHtml += '</div></div>';
+        linkedHtml += '</div></div>';
     }
     
     return `
-        <div class="bg-white rounded-xl shadow-lg border-2 border-emerald-500 p-5 min-w-[220px] max-w-[280px] relative">
-            <div class="flex items-center gap-3 mb-3">
-                <div class="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-white">
+        <div style="position: absolute; left: ${x}px; top: ${y}px; width: 220px;" class="bg-white rounded-xl shadow-lg border-2 border-emerald-500 p-4 cursor-pointer hover:shadow-xl transition-shadow">
+            <div class="flex items-center gap-2 mb-2">
+                <div class="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white">
                     <i class="fas fa-cog"></i>
                 </div>
                 <div>
                     <div class="text-xs text-emerald-600 font-medium">QOS</div>
-                    <div class="font-bold text-slate-800 text-lg">${escapeHtml(q.name)}</div>
+                    <div class="font-bold text-slate-800">${escapeHtml(data.name)}</div>
                 </div>
             </div>
             ${quotaHtml}
-            ${childrenHtml}
+            ${linkedHtml}
         </div>
     `;
 }
 
-// 渲染账户节点
-function renderAccountNode(account, users) {
-    const quotaHtml = formatQuotaInfo(account.quota);
+// 渲染账户节点 HTML
+function renderAccountNodeHTML(x, y, data, linkedUsers, allData, positions) {
+    const quotaHtml = formatQuotaInfo(data.quota);
     
-    let childrenHtml = '';
-    if (users.length > 0) {
-        childrenHtml = '<div class="mt-4 pt-3 border-t border-slate-200">';
-        childrenHtml += '<div class="text-xs text-slate-500 mb-2">用户:</div>';
-        childrenHtml += '<div class="flex flex-wrap gap-1">';
-        users.forEach(u => {
-            childrenHtml += `<span class="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">${escapeHtml(u.name)}</span>`;
+    let linkedHtml = '';
+    if (linkedUsers.length > 0) {
+        linkedHtml = `<div class="mt-3 pt-2 border-t border-blue-200">
+            <div class="text-xs text-blue-600 mb-1">→ 用户:</div>
+            <div class="flex flex-wrap gap-1">`;
+        linkedUsers.forEach(u => {
+            linkedHtml += `<span class="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">${escapeHtml(u.name)}</span>`;
         });
-        childrenHtml += '</div></div>';
+        linkedHtml += '</div></div>';
     }
     
     return `
-        <div class="bg-white rounded-xl shadow-lg border-2 border-blue-500 p-5 min-w-[220px] max-w-[280px]">
-            <div class="flex items-center gap-3 mb-3">
-                <div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white">
+        <div style="position: absolute; left: ${x}px; top: ${y}px; width: 220px;" class="bg-white rounded-xl shadow-lg border-2 border-blue-500 p-4 cursor-pointer hover:shadow-xl transition-shadow">
+            <div class="flex items-center gap-2 mb-2">
+                <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white">
                     <i class="fas fa-folder"></i>
                 </div>
                 <div>
                     <div class="text-xs text-blue-600 font-medium">账户</div>
-                    <div class="font-bold text-slate-800 text-lg">${escapeHtml(account.name)}</div>
+                    <div class="font-bold text-slate-800">${escapeHtml(data.name)}</div>
                 </div>
             </div>
             ${quotaHtml}
-            ${childrenHtml}
+            ${linkedHtml}
+        </div>
+    `;
+}
+
+// 渲染用户节点 HTML
+function renderUserNodeHTML(x, y, data) {
+    const quotaHtml = formatQuotaInfo(data.quota);
+    
+    return `
+        <div style="position: absolute; left: ${x}px; top: ${y}px; width: 220px;" class="bg-white rounded-xl shadow-lg border-2 border-purple-500 p-4 cursor-pointer hover:shadow-xl transition-shadow">
+            <div class="flex items-center gap-2 mb-2">
+                <div class="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center text-white">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div>
+                    <div class="text-xs text-purple-600 font-medium">用户</div>
+                    <div class="font-bold text-slate-800">${escapeHtml(data.name)}</div>
+                </div>
+            </div>
+            ${quotaHtml}
         </div>
     `;
 }
@@ -219,13 +297,13 @@ function formatQuotaInfo(quota) {
         html += `<div class="flex justify-between"><span class="text-slate-500">组资源:</span><span>${escapeHtml(quota.grp_tres)}</span></div>`;
     }
     if (quota.max_tres && quota.max_tres !== 'N/A') {
-        html += `<div class="flex justify-between"><span class="text-slate-500">最大资源:</span><span>${escapeHtml(quota.max_tres)}</span></div>`;
+        html += `<div class="flex justify-between"><span class="text-slate-500">最大:</span><span>${escapeHtml(quota.max_tres)}</span></div>`;
     }
     if (quota.max_wall && quota.max_wall !== 'N/A') {
-        html += `<div class="flex justify-between"><span class="text-slate-500">最大时长:</span><span>${escapeHtml(quota.max_wall)}</span></div>`;
+        html += `<div class="flex justify-between"><span class="text-slate-500">时长:</span><span>${escapeHtml(quota.max_wall)}</span></div>`;
     }
     if (quota.max_jobs && quota.max_jobs !== 'N/A') {
-        html += `<div class="flex justify-between"><span class="text-slate-500">最大作业:</span><span>${escapeHtml(quota.max_jobs)}</span></div>`;
+        html += `<div class="flex justify-between"><span class="text-slate-500">作业数:</span><span>${escapeHtml(quota.max_jobs)}</span></div>`;
     }
     if (quota.priority) {
         html += `<div class="flex justify-between"><span class="text-slate-500">优先级:</span><span>${escapeHtml(quota.priority)}</span></div>`;
