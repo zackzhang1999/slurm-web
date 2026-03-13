@@ -1,0 +1,2208 @@
+{% extends "base.html" %}
+
+{% block title %}Amax 集群监控系统{% endblock %}
+{% block page_title %}仪表盘{% endblock %}
+{% block page_subtitle %}集群概览与实时监控{% endblock %}
+
+{% block content %}
+<!-- 仪表盘页面 -->
+<div id="page-dashboard" class="page-section">
+    <!-- 统计卡片 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200 card-hover">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <p class="text-sm font-medium text-slate-500">总节点</p>
+                    <p class="text-2xl font-bold text-slate-800 mt-1" id="summary-nodes-total">0</p>
+                </div>
+                <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                    <i class="fas fa-desktop text-blue-600 text-xl"></i>
+                </div>
+            </div>
+            <div class="grid grid-cols-4 gap-2 text-center">
+                <div><p class="text-lg font-semibold text-success-500" id="summary-nodes-idle">0</p><p class="text-xs text-slate-500">空闲</p></div>
+                <div><p class="text-lg font-semibold text-warning-500" id="summary-nodes-alloc">0</p><p class="text-xs text-slate-500">已分配</p></div>
+                <div><p class="text-lg font-semibold text-danger-500" id="summary-nodes-down">0</p><p class="text-xs text-slate-500">故障</p></div>
+                <div><p class="text-lg font-semibold text-purple-500" id="summary-nodes-mix">0</p><p class="text-xs text-slate-500">混合</p></div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200 card-hover">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <p class="text-sm font-medium text-slate-500">总作业</p>
+                    <p class="text-2xl font-bold text-slate-800 mt-1" id="summary-jobs-total">0</p>
+                </div>
+                <div class="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
+                    <i class="fas fa-tasks text-emerald-600 text-xl"></i>
+                </div>
+            </div>
+            <div class="grid grid-cols-3 gap-2 text-center">
+                <div><p class="text-lg font-semibold text-success-500" id="summary-jobs-running">0</p><p class="text-xs text-slate-500">运行中</p></div>
+                <div><p class="text-lg font-semibold text-warning-500" id="summary-jobs-pending">0</p><p class="text-xs text-slate-500">等待中</p></div>
+                <div><p class="text-lg font-semibold text-purple-500" id="summary-jobs-suspended">0</p><p class="text-xs text-slate-500">暂停</p></div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200 card-hover">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <p class="text-sm font-medium text-slate-500">CPU 核心</p>
+                    <p class="text-2xl font-bold text-slate-800 mt-1" id="summary-cpus-total">0</p>
+                </div>
+                <div class="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
+                    <i class="fas fa-microchip text-orange-600 text-xl"></i>
+                </div>
+            </div>
+            <div class="mb-2">
+                <div class="flex justify-between text-sm mb-1">
+                    <span class="text-slate-500">使用率</span>
+                    <span class="font-medium text-slate-700" id="cpu-usage-percent">0%</span>
+                </div>
+                <div class="progress-bar"><div class="progress-fill bg-primary-500" id="cpu-progress" style="width: 0%"></div></div>
+            </div>
+            <div class="flex justify-between text-sm">
+                <span class="text-slate-500">已分配: <span id="summary-cpus-alloc">0</span></span>
+                <span class="text-slate-500">空闲: <span id="summary-cpus-idle">0</span></span>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200 card-hover">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <p class="text-sm font-medium text-slate-500">GPU 数量</p>
+                    <p class="text-2xl font-bold text-slate-800 mt-1" id="summary-gpus-total">0</p>
+                </div>
+                <div class="w-12 h-12 bg-violet-100 rounded-xl flex items-center justify-center">
+                    <i class="fas fa-gamepad text-violet-600 text-xl"></i>
+                </div>
+            </div>
+            <div class="mb-2">
+                <div class="flex justify-between text-sm mb-1">
+                    <span class="text-slate-500">使用率</span>
+                    <span class="font-medium text-slate-700" id="gpu-usage-percent">0%</span>
+                </div>
+                <div class="progress-bar"><div class="progress-fill bg-violet-500" id="gpu-progress" style="width: 0%"></div></div>
+            </div>
+            <div class="flex justify-between text-sm">
+                <span class="text-slate-500">已分配: <span id="summary-gpus-alloc">0</span></span>
+                <span class="text-slate-500">可用: <span id="summary-gpus-free">0</span></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 图表区域 -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+            <h3 class="text-lg font-semibold text-slate-800 mb-4"><i class="fas fa-chart-pie text-primary-500 mr-2"></i>节点状态分布</h3>
+            <div class="h-56 relative"><canvas id="nodes-chart"></canvas></div>
+        </div>
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+            <h3 class="text-lg font-semibold text-slate-800 mb-4"><i class="fas fa-chart-pie text-primary-500 mr-2"></i>作业状态分布</h3>
+            <div class="h-56 relative"><canvas id="jobs-chart"></canvas></div>
+        </div>
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+            <h3 class="text-lg font-semibold text-slate-800 mb-4"><i class="fas fa-chart-pie text-primary-500 mr-2"></i>CPU 资源使用</h3>
+            <div class="h-56 relative"><canvas id="cpu-chart"></canvas></div>
+        </div>
+    </div>
+
+    <!-- GPU 详细使用情况 - 缩略图显示 -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 mb-8">
+        <div class="p-6 border-b border-slate-200 flex justify-between items-center">
+            <h3 class="text-lg font-semibold text-slate-800"><i class="fas fa-microchip text-primary-500 mr-2"></i>GPU 详细使用情况</h3>
+            <div id="dashboard-gpu-summary" class="flex gap-2"></div>
+        </div>
+        <div class="p-4">
+            <div id="gpu-thumbnail-grid" class="grid grid-cols-8 md:grid-cols-12 lg:grid-cols-16 xl:grid-cols-16 gap-2">
+                <!-- GPU缩略图将通过JS动态生成 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 作业表格 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+            <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-slate-800"><i class="fas fa-play text-success-500 mr-2"></i>运行中的作业</h3>
+                <button onclick="switchPage('jobs')" class="text-sm text-primary-500 hover:text-primary-600">查看全部</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full table-modern" id="running-jobs-table">
+                    <thead>
+                        <tr><th class="px-4 py-3 text-left">作业ID</th><th class="px-4 py-3 text-left">名称</th><th class="px-4 py-3 text-left">用户</th><th class="px-4 py-3 text-left">分区</th><th class="px-4 py-3 text-left">状态</th></tr>
+                    </thead>
+                    <tbody id="running-jobs-body"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+            <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-slate-800"><i class="fas fa-clock text-warning-500 mr-2"></i>等待中的作业</h3>
+                <button onclick="switchPage('jobs')" class="text-sm text-primary-500 hover:text-primary-600">查看全部</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full table-modern" id="pending-jobs-table">
+                    <thead>
+                        <tr><th class="px-4 py-3 text-left">作业ID</th><th class="px-4 py-3 text-left">名称</th><th class="px-4 py-3 text-left">用户</th><th class="px-4 py-3 text-left">优先级</th></tr>
+                    </thead>
+                    <tbody id="pending-jobs-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 节点监控页面 -->
+<div id="page-nodes" class="page-section hidden">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+        <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-slate-800"><i class="fas fa-desktop text-primary-500 mr-2"></i>节点详细信息</h3>
+            <div class="flex gap-2">
+                <select id="node-state-filter" onchange="filterNodes()" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <option value="">所有状态</option>
+                    <option value="idle">空闲</option>
+                    <option value="alloc">已分配</option>
+                    <option value="mix">混合</option>
+                    <option value="down">故障</option>
+                </select>
+                <input type="text" id="node-search" onkeyup="filterNodes()" placeholder="搜索节点..." class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+            </div>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full table-modern" id="nodes-table">
+                <thead>
+                    <tr>
+                        <th class="px-6 py-3 text-left">节点名</th>
+                        <th class="px-6 py-3 text-left">状态</th>
+                        <th class="px-6 py-3 text-left">分区</th>
+                        <th class="px-6 py-3 text-left">CPU配置</th>
+                        <th class="px-6 py-3 text-left">内存</th>
+                        <th class="px-6 py-3 text-left">空闲内存</th>
+                        <th class="px-6 py-3 text-left">负载</th>
+                        <th class="px-6 py-3 text-left">GPU</th>
+                        <th class="px-6 py-3 text-left">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="nodes-table-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 预留管理 -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 mt-6">
+        <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-slate-800">
+                <i class="fas fa-calendar-check text-primary-500 mr-2"></i>资源预留
+            </h3>
+            <button onclick="openCreateReservationModal()" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg text-sm transition-colors admin-only">
+                <i class="fas fa-plus mr-2"></i>创建预留
+            </button>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full table-modern">
+                <thead>
+                    <tr>
+                        <th class="px-6 py-3 text-left">预留名称</th>
+                        <th class="px-6 py-3 text-left">状态</th>
+                        <th class="px-6 py-3 text-left">节点</th>
+                        <th class="px-6 py-3 text-left">授权用户/账户</th>
+                        <th class="px-6 py-3 text-left">开始时间</th>
+                        <th class="px-6 py-3 text-left">结束时间</th>
+                        <th class="px-6 py-3 text-left">持续时间</th>
+                        <th class="px-6 py-3 text-left">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="reservations-table-body">
+                    <tr>
+                        <td colspan="8" class="px-6 py-8 text-center text-slate-500">
+                            <i class="fas fa-spinner fa-spin mr-2"></i>加载中...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 作业管理页面 -->
+<div id="page-jobs" class="page-section hidden">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+        <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-slate-800"><i class="fas fa-tasks text-primary-500 mr-2"></i>作业队列</h3>
+            <div class="flex gap-2">
+                <select id="job-state-filter" onchange="filterJobs()" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <option value="">所有状态</option>
+                    <option value="R">运行中</option>
+                    <option value="PD">等待中</option>
+                    <option value="S">暂停</option>
+                    <option value="CG">完成中</option>
+                </select>
+                <select id="job-partition-filter" onchange="filterJobs()" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <option value="">所有分区</option>
+                </select>
+                <input type="text" id="job-search" onkeyup="filterJobs()" placeholder="搜索作业..." class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+            </div>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full table-modern" id="jobs-table">
+                <thead>
+                    <tr>
+                        <th class="px-4 py-3 text-left"><input type="checkbox" id="select-all-jobs" onclick="toggleSelectAll()"></th>
+                        <th class="px-4 py-3 text-left">作业ID</th>
+                        <th class="px-4 py-3 text-left">名称</th>
+                        <th class="px-4 py-3 text-left">用户</th>
+                        <th class="px-4 py-3 text-left">分区</th>
+                        <th class="px-4 py-3 text-left">状态</th>
+                        <th class="px-4 py-3 text-left">阻塞原因</th>
+                        <th class="px-4 py-3 text-left">节点</th>
+                        <th class="px-4 py-3 text-left">CPU</th>
+                        <th class="px-4 py-3 text-left">内存</th>
+                        <th class="px-4 py-3 text-left">GPU</th>
+                        <th class="px-4 py-3 text-left">时间</th>
+                        <th class="px-4 py-3 text-left">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="jobs-table-body"></tbody>
+            </table>
+        </div>
+        <div class="p-4 border-t border-slate-200 flex items-center gap-4 admin-only">
+            <button onclick="batchAction('cancel')" class="px-4 py-2 bg-danger-500 hover:bg-danger-600 text-white rounded-lg text-sm transition-colors">
+                <i class="fas fa-times mr-2"></i>批量取消
+            </button>
+            <button onclick="batchAction('suspend')" class="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg text-sm transition-colors">
+                <i class="fas fa-pause mr-2"></i>暂停作业
+            </button>
+            <button onclick="batchAction('resume')" class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-sm transition-colors">
+                <i class="fas fa-play mr-2"></i>恢复作业
+            </button>
+            <button onclick="batchAction('hold')" class="px-4 py-2 bg-warning-500 hover:bg-warning-600 text-white rounded-lg text-sm transition-colors">
+                <i class="fas fa-hand-paper mr-2"></i>挂起作业
+            </button>
+            <button onclick="batchAction('release')" class="px-4 py-2 bg-success-500 hover:bg-success-600 text-white rounded-lg text-sm transition-colors">
+                <i class="fas fa-play mr-2"></i>释放作业
+            </button>
+            <span id="selected-count" class="text-sm text-slate-500">已选择 0 个作业</span>
+        </div>
+        <!-- 分页控件 -->
+        <div class="p-4 border-t border-slate-200 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <span class="text-sm text-slate-500">每页显示</span>
+                <select id="jobs-per-page" onchange="changeJobsPerPage()" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <option value="20" selected>20条</option>
+                    <option value="50">50条</option>
+                    <option value="100">100条</option>
+                    <option value="200">200条</option>
+                </select>
+                <span id="jobs-pagination-info" class="text-sm text-slate-500"></span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="goToFirstPage()" class="px-3 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed" id="jobs-first-btn">
+                    <i class="fas fa-angle-double-left"></i>
+                </button>
+                <button onclick="goToPrevPage()" class="px-3 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed" id="jobs-prev-btn">
+                    <i class="fas fa-angle-left"></i>
+                </button>
+                <span id="jobs-page-info" class="text-sm text-slate-500 px-2">第 1 页</span>
+                <button onclick="goToNextPage()" class="px-3 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed" id="jobs-next-btn">
+                    <i class="fas fa-angle-right"></i>
+                </button>
+                <button onclick="goToLastPage()" class="px-3 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed" id="jobs-last-btn">
+                    <i class="fas fa-angle-double-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- GPU监控页面 -->
+<div id="page-gpu" class="page-section hidden">
+    <div id="gpu-cards" class="space-y-4"></div>
+    <!-- GPU 进程 - 可折叠，默认折叠 -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 mt-6 overflow-hidden" id="gpu-processes-section">
+        <div class="p-4 border-b border-slate-200 bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors flex items-center justify-between" onclick="toggleGPUProcessesSection()">
+            <div class="flex items-center gap-3">
+                <i class="fas fa-microchip text-primary-500"></i>
+                <h3 class="text-lg font-semibold text-slate-800">GPU 进程</h3>
+                <span class="text-sm text-slate-500" id="gpu-processes-count"></span>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="text-xs text-slate-400 hidden md:inline">点击展开/折叠</span>
+                <div class="gpu-processes-toggle text-slate-400 transition-transform duration-300">
+                    <i class="fas fa-chevron-down"></i>
+                </div>
+            </div>
+        </div>
+        <div class="gpu-processes-content hidden" style="max-height: 0; overflow: hidden; transition: max-height 0.3s ease;">
+            <div class="overflow-x-auto">
+                <table class="w-full table-modern" id="gpu-processes-table">
+                    <thead>
+                        <tr>
+                            <th class="px-6 py-3 text-left">节点</th>
+                            <th class="px-6 py-3 text-left">GPU ID</th>
+                            <th class="px-6 py-3 text-left">PID</th>
+                            <th class="px-6 py-3 text-left">类型</th>
+                            <th class="px-6 py-3 text-left">SM 使用率</th>
+                            <th class="px-6 py-3 text-left">显存使用率</th>
+                            <th class="px-6 py-3 text-left">命令</th>
+                        </tr>
+                    </thead>
+                    <tbody id="gpu-processes-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 用户统计页面 -->
+<div id="page-users" class="page-section hidden">
+    <!-- 控制栏 -->
+    <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200 mb-6">
+        <div class="flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-slate-800"><i class="fas fa-users text-primary-500 mr-2"></i>用户统计</h3>
+            <div class="flex items-center gap-4">
+                <select id="user-stats-time-range" onchange="loadUsersDataWithHistory(this.value)" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <option value="1">今天</option>
+                    <option value="7" selected>过去7天</option>
+                    <option value="30">过去30天</option>
+                    <option value="90">过去90天</option>
+                </select>
+                <button onclick="loadUsersDataWithHistory()" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg text-sm">
+                    <i class="fas fa-sync-alt mr-2"></i>刷新
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- CPU/GPU 时间分布 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+            <h3 class="text-lg font-semibold text-slate-800 mb-4"><i class="fas fa-microchip text-primary-500 mr-2"></i>用户 CPU 时间分布 (Top 10)</h3>
+            <div class="h-64 relative"><canvas id="user-cpu-chart"></canvas></div>
+            <div class="mt-4 text-sm text-slate-500 text-center">
+                总 CPU 时间: <span id="total-cpu-hours" class="font-semibold text-slate-800">-</span> 小时
+            </div>
+        </div>
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+            <h3 class="text-lg font-semibold text-slate-800 mb-4"><i class="fas fa-gamepad text-primary-500 mr-2"></i>用户 GPU 时间分布 (Top 10)</h3>
+            <div class="h-64 relative"><canvas id="user-gpu-chart"></canvas></div>
+            <div class="mt-4 text-sm text-slate-500 text-center">
+                总 GPU 时间: <span id="total-gpu-hours" class="font-semibold text-slate-800">-</span> 小时
+            </div>
+        </div>
+    </div>
+    <!-- 用户资源使用详情表 -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+        <div class="p-6 border-b border-slate-200">
+            <h3 class="text-lg font-semibold text-slate-800"><i class="fas fa-users text-primary-500 mr-2"></i>用户资源使用详情</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full table-modern" id="users-table">
+                <thead>
+                    <tr>
+                        <th class="px-6 py-3 text-left">排名</th>
+                        <th class="px-6 py-3 text-left">用户</th>
+                        <th class="px-6 py-3 text-left">作业数</th>
+                        <th class="px-6 py-3 text-left">CPU时间(小时)</th>
+                        <th class="px-6 py-3 text-left">CPU占比</th>
+                        <th class="px-6 py-3 text-left">GPU时间(小时)</th>
+                        <th class="px-6 py-3 text-left">GPU占比</th>
+                    </tr>
+                </thead>
+                <tbody id="users-table-body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 分区信息页面 -->
+<div id="page-partitions" class="page-section hidden">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6" id="partitions-grid"></div>
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+        <div class="p-6 border-b border-slate-200">
+            <h3 class="text-lg font-semibold text-slate-800"><i class="fas fa-layer-group text-primary-500 mr-2"></i>分区作业统计</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full table-modern" id="partition-stats-table">
+                <thead>
+                    <tr>
+                        <th class="px-6 py-3 text-left">分区</th>
+                        <th class="px-6 py-3 text-left">运行中</th>
+                        <th class="px-6 py-3 text-left">等待中</th>
+                        <th class="px-6 py-3 text-left">总计</th>
+                    </tr>
+                </thead>
+                <tbody id="partition-stats-body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 统计报表页面 - 增强版 -->
+<div id="page-statistics" class="page-section hidden">
+    <!-- 控制栏 -->
+    <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-200 mb-6">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-4">
+                <h3 class="text-lg font-semibold text-slate-800"><i class="fas fa-chart-area text-primary-500 mr-2"></i>统计报表</h3>
+                <select id="stats-time-range" onchange="loadAllStatistics()" class="px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <option value="24">过去 24 小时</option>
+                    <option value="168" selected>过去 7 天</option>
+                    <option value="720">过去 30 天</option>
+                    <option value="2160">过去 90 天</option>
+                </select>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="exportStats('jobs')" class="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-sm transition-colors">
+                    <i class="fas fa-download mr-2"></i>导出作业数据
+                </button>
+                <button onclick="loadAllStatistics()" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg text-sm">
+                    <i class="fas fa-sync-alt mr-2"></i>刷新
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 概览统计 -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center"><i class="fas fa-check-circle text-green-600 text-xl"></i></div>
+                <div><p class="text-sm text-slate-500">已完成</p><p class="text-2xl font-bold text-slate-800" id="stats-completed">0</p></div>
+            </div>
+        </div>
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center"><i class="fas fa-times-circle text-red-600 text-xl"></i></div>
+                <div><p class="text-sm text-slate-500">失败</p><p class="text-2xl font-bold text-slate-800" id="stats-failed">0</p></div>
+            </div>
+        </div>
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center"><i class="fas fa-clock text-blue-600 text-xl"></i></div>
+                <div><p class="text-sm text-slate-500">成功率</p><p class="text-2xl font-bold text-slate-800" id="stats-success-rate">0%</p></div>
+            </div>
+        </div>
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center"><i class="fas fa-microchip text-purple-600 text-xl"></i></div>
+                <div><p class="text-sm text-slate-500">CPU时间(小时)</p><p class="text-2xl font-bold text-slate-800" id="stats-cpu-hours">0</p></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 图表区域 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <!-- 作业状态分布 -->
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+            <h3 class="text-lg font-semibold text-slate-800 mb-4"><i class="fas fa-chart-pie text-primary-500 mr-2"></i>作业状态分布</h3>
+            <div class="h-64 relative"><canvas id="stats-job-state-chart"></canvas></div>
+        </div>
+        <!-- 作业时长分布 -->
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+            <h3 class="text-lg font-semibold text-slate-800 mb-4"><i class="fas fa-chart-bar text-primary-500 mr-2"></i>作业时长分布</h3>
+            <div class="h-64 relative"><canvas id="stats-duration-chart"></canvas></div>
+        </div>
+    </div>
+
+    <!-- 趋势图表 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <!-- 小时趋势 -->
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+            <h3 class="text-lg font-semibold text-slate-800 mb-4">
+                <i class="fas fa-chart-line text-primary-500 mr-2"></i>
+                作业提交趋势(小时) <span id="hourly-chart-range" class="text-sm font-normal text-slate-500">-</span>
+            </h3>
+            <div class="h-64 relative"><canvas id="stats-hourly-chart"></canvas></div>
+        </div>
+        <!-- 日趋势 -->
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+            <h3 class="text-lg font-semibold text-slate-800 mb-4">
+                <i class="fas fa-calendar-alt text-primary-500 mr-2"></i>
+                作业提交趋势(按天) <span id="daily-chart-range" class="text-sm font-normal text-slate-500">-</span>
+            </h3>
+            <div class="h-64 relative"><canvas id="stats-daily-chart"></canvas></div>
+        </div>
+    </div>
+
+    <!-- 等待时间分析 -->
+    <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200 mb-6">
+        <h3 class="text-lg font-semibold text-slate-800 mb-4"><i class="fas fa-hourglass-half text-primary-500 mr-2"></i>作业等待时间分析</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="grid grid-cols-2 gap-4">
+                <div class="bg-slate-50 rounded-lg p-4 text-center">
+                    <p class="text-sm text-slate-500">平均等待</p>
+                    <p class="text-2xl font-bold text-slate-800" id="wait-avg">-</p>
+                </div>
+                <div class="bg-slate-50 rounded-lg p-4 text-center">
+                    <p class="text-sm text-slate-500">中位数等待</p>
+                    <p class="text-2xl font-bold text-slate-800" id="wait-median">-</p>
+                </div>
+                <div class="bg-slate-50 rounded-lg p-4 text-center">
+                    <p class="text-sm text-slate-500">最短等待</p>
+                    <p class="text-2xl font-bold text-success-600" id="wait-min">-</p>
+                </div>
+                <div class="bg-slate-50 rounded-lg p-4 text-center">
+                    <p class="text-sm text-slate-500">最长等待</p>
+                    <p class="text-2xl font-bold text-danger-600" id="wait-max">-</p>
+                </div>
+            </div>
+            <div class="h-48 relative"><canvas id="stats-wait-chart"></canvas></div>
+        </div>
+    </div>
+
+    <!-- 分区使用情况 -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 mb-6">
+        <div class="p-6 border-b border-slate-200">
+            <h3 class="text-lg font-semibold text-slate-800"><i class="fas fa-server text-primary-500 mr-2"></i>分区使用情况</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full table-modern" id="partition-usage-table">
+                <thead>
+                    <tr>
+                        <th class="px-6 py-3 text-left">分区</th>
+                        <th class="px-6 py-3 text-left">作业总数</th>
+                        <th class="px-6 py-3 text-left">已完成</th>
+                        <th class="px-6 py-3 text-left">失败</th>
+                        <th class="px-6 py-3 text-left">成功率</th>
+                        <th class="px-6 py-3 text-left">CPU时间(小时)</th>
+                    </tr>
+                </thead>
+                <tbody id="partition-usage-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 节点效率排行 -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 mb-6">
+        <div class="p-6 border-b border-slate-200">
+            <h3 class="text-lg font-semibold text-slate-800"><i class="fas fa-tachometer-alt text-primary-500 mr-2"></i>节点效率排行</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full table-modern" id="node-efficiency-table">
+                <thead>
+                    <tr>
+                        <th class="px-6 py-3 text-left">排名</th>
+                        <th class="px-6 py-3 text-left">节点</th>
+                        <th class="px-6 py-3 text-left">分配率</th>
+                        <th class="px-6 py-3 text-left">空闲率</th>
+                        <th class="px-6 py-3 text-left">故障率</th>
+                        <th class="px-6 py-3 text-left">综合效率</th>
+                    </tr>
+                </thead>
+                <tbody id="node-efficiency-body"></tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- 用户排行 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+            <div class="p-6 border-b border-slate-200">
+                <h3 class="text-lg font-semibold text-slate-800"><i class="fas fa-trophy text-amber-500 mr-2"></i>用户排行 - CPU时间</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full table-modern" id="user-rank-cpu-table">
+                    <thead>
+                        <tr><th class="px-6 py-3 text-left">排名</th><th class="px-6 py-3 text-left">用户</th><th class="px-6 py-3 text-left">CPU时间</th><th class="px-6 py-3 text-left">作业数</th></tr>
+                    </thead>
+                    <tbody id="user-rank-cpu-body"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+            <div class="p-6 border-b border-slate-200">
+                <h3 class="text-lg font-semibold text-slate-800"><i class="fas fa-chart-bar text-primary-500 mr-2"></i>用户排行 - 作业数</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full table-modern" id="user-rank-jobs-table">
+                    <thead>
+                        <tr><th class="px-6 py-3 text-left">排名</th><th class="px-6 py-3 text-left">用户</th><th class="px-6 py-3 text-left">作业数</th><th class="px-6 py-3 text-left">CPU时间</th></tr>
+                    </thead>
+                    <tbody id="user-rank-jobs-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 悬浮操作按钮 -->
+<div class="fixed bottom-8 right-8 flex flex-col gap-3">
+    <button onclick="showSubmitJobModal()" class="w-14 h-14 bg-primary-500 hover:bg-primary-600 text-white rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-110" title="提交作业">
+        <i class="fas fa-plus text-xl"></i>
+    </button>
+    <button onclick="toggleAutoRefresh()" id="auto-refresh-btn" class="w-12 h-12 bg-white hover:bg-slate-50 text-slate-600 rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-110" title="自动刷新">
+        <i class="fas fa-sync-alt" id="auto-refresh-icon"></i>
+    </button>
+</div>
+
+<!-- 作业提交模态框 -->
+<div id="submit-job-modal" class="modal">
+    <div class="modal-content" style="max-width: 700px;">
+        <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+            <h3 class="text-lg font-semibold"><i class="fas fa-plus-circle text-primary-500 mr-2"></i>提交新作业</h3>
+            <button onclick="closeSubmitJobModal()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="p-6 max-h-[60vh] overflow-y-auto">
+            <form id="submit-job-form" class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">作业名称</label>
+                        <input type="text" name="name" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="my_job">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">分区 <span class="text-red-500">*</span></label>
+                        <select name="partition" id="job-partition-select" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" required>
+                            <option value="">选择分区</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">QOS</label>
+                        <select name="qos" id="job-qos-select" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                            <option value="">加载中...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">最大运行时间</label>
+                        <input type="text" name="time" value="01:00:00" placeholder="HH:MM:SS" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    </div>
+                </div>
+                <div class="grid grid-cols-4 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">节点数</label>
+                        <input type="number" name="nodes" value="1" min="1" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">CPU 核心数</label>
+                        <input type="number" name="cpus" value="1" min="1" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">内存 (GB)</label>
+                        <input type="number" name="memory" value="4" min="1" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">GPU 数量</label>
+                        <input type="number" name="gpus" value="0" min="0" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    </div>
+                </div>
+                
+                <!-- 输出目录 -->
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">输出目录 <span class="text-slate-400 font-normal">(默认为家目录)</span></label>
+                    <input type="text" name="output_dir" id="job-output-dir" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="/home/username/output">
+                    <p class="text-xs text-slate-500 mt-1"><i class="fas fa-folder-open mr-1"></i>作业输出文件将保存到此目录，如果该目录不存在需要先创建</p>
+                </div>
+                
+                <!-- 文件上传 -->
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">上传文件 <span class="text-slate-400 font-normal">(可选)</span></label>
+                    <div class="relative">
+                        <input type="file" name="files" id="job-files" multiple class="hidden" onchange="updateFileList(this)">
+                        <label for="job-files" class="flex items-center justify-center w-full px-4 py-3 border-2 border-dashed border-slate-300 rounded-lg cursor-pointer hover:border-primary-500 hover:bg-slate-50 transition-colors">
+                            <div class="text-center">
+                                <i class="fas fa-cloud-upload-alt text-2xl text-slate-400 mb-2"></i>
+                                <p class="text-sm text-slate-600">点击选择文件或拖拽到此处</p>
+                                <p class="text-xs text-slate-400 mt-1">支持多文件上传</p>
+                            </div>
+                        </label>
+                    </div>
+                    <div id="file-list" class="mt-2 space-y-1"></div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">执行命令</label>
+                    <textarea name="command" rows="3" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="#!/bin/bash
+echo 'Hello World'"></textarea>
+                </div>
+            </form>
+        </div>
+        <div class="p-6 border-t border-slate-200 flex justify-end gap-3">
+            <button onclick="closeSubmitJobModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">取消</button>
+            <button onclick="submitJob()" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors"><i class="fas fa-paper-plane mr-2"></i>提交作业</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let nodesChart, jobsChart, cpuChart;
+let statsJobStateChart, statsDurationChart, statsHourlyChart, statsDailyChart, statsWaitChart;
+let autoRefresh = false;
+let autoRefreshInterval = null;
+let allData = {};
+window.allData = allData; // 暴露到全局供详情页使用
+
+// 数据更新回调
+window.onDataUpdate = function(data) {
+    allData = data;
+    window.allData = data;
+    updateSummary(data.summary);
+    updateCharts(data.summary);
+    updateGPUTable(data.gpus);
+    updateJobsTables(data.jobs);
+    
+    if (window.currentPage === 'nodes') loadNodesTable(data.nodes);
+    if (window.currentPage === 'jobs') loadJobsTable(data.jobs);
+    if (window.currentPage === 'gpu') loadGPUCards(data.gpus, data.gpu_processes);
+    if (window.currentPage === 'users') loadUsersTable(data.user_stats);
+    if (window.currentPage === 'partitions') loadPartitionsTable(data.partitions, data.partition_stats);
+};
+
+function updateSummary(summary) {
+    document.getElementById('summary-nodes-total').textContent = summary.nodes.total;
+    document.getElementById('summary-nodes-idle').textContent = summary.nodes.idle;
+    document.getElementById('summary-nodes-alloc').textContent = summary.nodes.alloc;
+    document.getElementById('summary-nodes-down').textContent = summary.nodes.down;
+    document.getElementById('summary-nodes-mix').textContent = summary.nodes.mix;
+    document.getElementById('summary-jobs-total').textContent = summary.jobs.total;
+    document.getElementById('summary-jobs-running').textContent = summary.jobs.running;
+    document.getElementById('summary-jobs-pending').textContent = summary.jobs.pending;
+    document.getElementById('summary-jobs-suspended').textContent = summary.jobs.suspended;
+    document.getElementById('summary-cpus-total').textContent = summary.cpus.total;
+    document.getElementById('summary-cpus-alloc').textContent = summary.cpus.alloc;
+    document.getElementById('summary-cpus-idle').textContent = summary.cpus.idle;
+    const cpuPercent = summary.cpus.total > 0 ? Math.round((summary.cpus.alloc / summary.cpus.total) * 100) : 0;
+    document.getElementById('cpu-usage-percent').textContent = cpuPercent + '%';
+    document.getElementById('cpu-progress').style.width = cpuPercent + '%';
+    document.getElementById('summary-gpus-total').textContent = summary.gpus.total;
+    document.getElementById('summary-gpus-alloc').textContent = summary.gpus.alloc;
+    document.getElementById('summary-gpus-free').textContent = summary.gpus.total - summary.gpus.alloc;
+    // 已分配率 = 已分配 / 总数
+    const gpuPercent = summary.gpus.total > 0 ? Math.round((summary.gpus.alloc / summary.gpus.total) * 100) : 0;
+    document.getElementById('gpu-usage-percent').textContent = gpuPercent + '%';
+    document.getElementById('gpu-progress').style.width = gpuPercent + '%';
+}
+
+function updateCharts(summary) {
+    if (nodesChart) {
+        nodesChart.data.datasets[0].data = [summary.nodes.idle, summary.nodes.alloc, summary.nodes.mix, summary.nodes.down];
+        nodesChart.update();
+    }
+    if (jobsChart) {
+        jobsChart.data.datasets[0].data = [summary.jobs.running, summary.jobs.pending, summary.jobs.suspended, Math.max(0, summary.jobs.total - summary.jobs.running - summary.jobs.pending - summary.jobs.suspended)];
+        jobsChart.update();
+    }
+    if (cpuChart) {
+        cpuChart.data.datasets[0].data = [summary.cpus.alloc, summary.cpus.idle];
+        cpuChart.update();
+    }
+}
+
+function initCharts() {
+    const colors = { success: '#22c55e', warning: '#f59e0b', purple: '#8b5cf6', danger: '#ef4444', primary: '#3b82f6' };
+    nodesChart = new Chart(document.getElementById('nodes-chart'), {
+        type: 'doughnut',
+        data: { labels: ['空闲', '已分配', '混合', '故障'], datasets: [{ data: [0,0,0,0], backgroundColor: [colors.success, colors.warning, colors.purple, colors.danger], borderWidth: 0 }] },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom', labels: { padding: 15, font: { size: 11 } } } } }
+    });
+    jobsChart = new Chart(document.getElementById('jobs-chart'), {
+        type: 'doughnut',
+        data: { labels: ['运行中', '等待中', '暂停', '其他'], datasets: [{ data: [0,0,0,0], backgroundColor: [colors.success, colors.warning, colors.purple, colors.primary], borderWidth: 0 }] },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom', labels: { padding: 15, font: { size: 11 } } } } }
+    });
+    cpuChart = new Chart(document.getElementById('cpu-chart'), {
+        type: 'doughnut',
+        data: { labels: ['已分配', '空闲'], datasets: [{ data: [0,0], backgroundColor: [colors.warning, colors.success], borderWidth: 0 }] },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom', labels: { padding: 15, font: { size: 11 } } } } }
+    });
+}
+
+function updateGPUTable(gpus) {
+    const grid = document.getElementById('gpu-thumbnail-grid');
+    const summaryDiv = document.getElementById('dashboard-gpu-summary');
+    
+    if (!gpus || gpus.length === 0) {
+        grid.innerHTML = '<div class="col-span-full text-center py-8 text-slate-500">未检测到 GPU</div>';
+        summaryDiv.innerHTML = '';
+        return;
+    }
+    
+    // 按节点分组统计
+    const nodeStats = {};
+    gpus.forEach(gpu => {
+        const node = gpu.node || 'localhost';
+        if (!nodeStats[node]) {
+            nodeStats[node] = { total: 0, active: 0, temp: 0 };
+        }
+        nodeStats[node].total++;
+        const util = parseInt(gpu.utilization) || 0;
+        if (util > 0) nodeStats[node].active++;
+        nodeStats[node].temp += parseInt(gpu.temperature) || 0;
+    });
+    
+    // 生成节点摘要
+    summaryDiv.innerHTML = Object.entries(nodeStats).map(([node, stats]) => {
+        const avgTemp = Math.round(stats.temp / stats.total);
+        return `<span class="badge badge-primary" title="${node}: ${stats.active}/${stats.total} 活跃, 平均温度 ${avgTemp}°C">${node}: ${stats.active}/${stats.total}</span>`;
+    }).join('');
+    
+    // 生成缩略图 - 简化版：只显示GPU编号和温度
+    grid.innerHTML = gpus.map(gpu => {
+        const temp = parseInt(gpu.temperature) || 0;
+        const node = gpu.node || 'localhost';
+        const util = parseInt(gpu.utilization) || 0;
+        const memUsed = parseInt(gpu.memory_used) || 0;
+        const memTotal = parseInt(gpu.memory_total) || 1;
+        const memPercent = Math.round((memUsed / memTotal) * 100);
+        const isActive = util > 0;
+        
+        // 温度颜色：80-85黄色，>85红色，<80绿色
+        let tempClass, tempBgClass;
+        if (temp > 85) {
+            tempClass = 'text-red-600';
+            tempBgClass = 'bg-red-50 border-red-300';
+        } else if (temp >= 80) {
+            tempClass = 'text-yellow-600';
+            tempBgClass = 'bg-yellow-50 border-yellow-300';
+        } else {
+            tempClass = 'text-green-600';
+            tempBgClass = 'bg-green-50 border-green-300';
+        }
+        
+        return `
+            <div class="${tempBgClass} ${isActive ? 'ring-1 ring-violet-300' : ''} border rounded p-1.5 text-center cursor-pointer hover:shadow-sm transition-all duration-200" 
+                 title="${gpu.name}
+节点: ${node}
+温度: ${temp}°C
+利用率: ${util}%
+显存: ${Math.round(memUsed/1024)}G/${Math.round(memTotal/1024)}G (${memPercent}%)
+功耗: ${gpu.power_draw !== 'N/A' ? gpu.power_draw + 'W' : 'N/A'}">
+                <div class="text-xs font-medium text-slate-600 leading-tight">${gpu.index}</div>
+                <div class="text-sm font-bold ${tempClass} leading-tight">${temp}°C</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function updateJobsTables(jobs) {
+    const runningBody = document.getElementById('running-jobs-body');
+    const pendingBody = document.getElementById('pending-jobs-body');
+    runningBody.innerHTML = '';
+    pendingBody.innerHTML = '';
+    if (!jobs) return;
+    const runningJobs = jobs.filter(j => j.state === 'R').slice(0, 5);
+    const pendingJobs = jobs.filter(j => j.state === 'PD').slice(0, 5);
+    runningJobs.forEach(job => {
+        runningBody.innerHTML += `<tr class="fade-in hover:bg-slate-50 transition-colors">
+            <td class="px-4 py-3">
+                <a href="#" onclick="showJobDetail('${job.job_id}'); return false;" 
+                   class="font-medium text-primary-600 hover:text-primary-700 hover:underline cursor-pointer">
+                    #${job.job_id}
+                </a>
+            </td>
+            <td class="px-4 py-3">${job.name}</td>
+            <td class="px-4 py-3">${job.user}</td>
+            <td class="px-4 py-3">${job.partition}</td>
+            <td class="px-4 py-3">${getStateBadge(job.state)}</td>
+        </tr>`;
+    });
+    pendingJobs.forEach(job => {
+        pendingBody.innerHTML += `<tr class="fade-in hover:bg-slate-50 transition-colors">
+            <td class="px-4 py-3">
+                <a href="#" onclick="showJobDetail('${job.job_id}'); return false;" 
+                   class="font-medium text-primary-600 hover:text-primary-700 hover:underline cursor-pointer">
+                    #${job.job_id}
+                </a>
+            </td>
+            <td class="px-4 py-3">${job.name}</td>
+            <td class="px-4 py-3">${job.user}</td>
+            <td class="px-4 py-3">${job.priority}</td>
+        </tr>`;
+    });
+    if (runningJobs.length === 0) runningBody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">暂无运行中的作业</td></tr>';
+    if (pendingJobs.length === 0) pendingBody.innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-slate-500">暂无等待中的作业</td></tr>';
+}
+
+// 节点监控页面
+function loadNodesTable(nodes) {
+    const tbody = document.getElementById('nodes-table-body');
+    tbody.innerHTML = '';
+    if (!nodes || nodes.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="px-6 py-8 text-center text-slate-500">暂无节点数据</td></tr>';
+        return;
+    }
+    nodes.forEach(node => {
+        tbody.innerHTML += `<tr class="fade-in hover:bg-slate-50 transition-colors">
+            <td class="px-6 py-4">
+                <a href="#" onclick="showNodeDetail('${node.name}'); return false;" 
+                   class="font-medium text-primary-600 hover:text-primary-700 hover:underline cursor-pointer"
+                   title="点击查看详情">
+                    ${node.name}
+                </a>
+            </td>
+            <td class="px-6 py-4">${getStateBadge(node.state)}</td>
+            <td class="px-6 py-4">${node.partition}</td>
+            <td class="px-6 py-4">${node.cpus}</td>
+            <td class="px-6 py-4">${formatBytes(parseInt(node.memory) * 1024 * 1024)}</td>
+            <td class="px-6 py-4">${formatBytes(parseInt(node.free_mem) * 1024 * 1024)}</td>
+            <td class="px-6 py-4">${node.load}</td>
+            <td class="px-6 py-4">${node.gres}</td>
+            <td class="px-6 py-4">
+                <button onclick="event.stopPropagation(); showNodeDetail('${node.name}')" 
+                        class="px-3 py-1 bg-primary-50 hover:bg-primary-100 text-primary-600 rounded-lg text-sm transition-colors">
+                    <i class="fas fa-eye mr-1"></i>详情
+                </button>
+            </td>
+        </tr>`;
+    });
+}
+window.loadNodesData = function() { if (allData.nodes) loadNodesTable(allData.nodes); };
+
+// 作业管理页面
+let selectedJobs = new Set();
+// 分页相关状态
+let jobsPagination = {
+    currentPage: 1,
+    perPage: 20,
+    totalJobs: 0,
+    totalPages: 1,
+    filteredJobs: []
+};
+
+function loadJobsTable(jobs) {
+    // 保存过滤后的作业列表
+    jobsPagination.filteredJobs = jobs || [];
+    jobsPagination.totalJobs = jobsPagination.filteredJobs.length;
+    jobsPagination.totalPages = Math.ceil(jobsPagination.totalJobs / jobsPagination.perPage) || 1;
+    
+    // 确保当前页不超出范围
+    if (jobsPagination.currentPage > jobsPagination.totalPages) {
+        jobsPagination.currentPage = jobsPagination.totalPages;
+    }
+    if (jobsPagination.currentPage < 1) {
+        jobsPagination.currentPage = 1;
+    }
+    
+    const tbody = document.getElementById('jobs-table-body');
+    tbody.innerHTML = '';
+    
+    if (!jobs || jobs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="13" class="px-6 py-8 text-center text-slate-500">暂无作业数据</td></tr>';
+        updatePaginationUI();
+        return;
+    }
+    
+    // 计算分页起止位置
+    const start = (jobsPagination.currentPage - 1) * jobsPagination.perPage;
+    const end = start + jobsPagination.perPage;
+    const paginatedJobs = jobsPagination.filteredJobs.slice(start, end);
+    
+    paginatedJobs.forEach(job => {
+        const isSelected = selectedJobs.has(job.job_id);
+        // Format reason: only show for pending jobs, hide for running/completed jobs
+        let reason = '-';
+        if (job.state === 'PD' && job.reason && job.reason !== 'None') {
+            reason = job.reason;
+        } else if (job.state !== 'R' && job.reason && job.reason !== 'None' && job.reason !== '-') {
+            // For other non-running states, show reason if exists
+            reason = job.reason;
+        }
+        tbody.innerHTML += `<tr class="fade-in hover:bg-slate-50 transition-colors">
+            <td class="px-4 py-3"><input type="checkbox" class="job-checkbox" value="${job.job_id}" ${isSelected ? 'checked' : ''} onchange="toggleJobSelection('${job.job_id}')"></td>
+            <td class="px-4 py-3">
+                <a href="#" onclick="showJobDetail('${job.job_id}'); return false;" 
+                   class="font-medium text-primary-600 hover:text-primary-700 hover:underline cursor-pointer"
+                   title="点击查看详情">
+                    #${job.job_id}
+                </a>
+            </td>
+            <td class="px-4 py-3">${job.name}</td>
+            <td class="px-4 py-3">${job.user}</td>
+            <td class="px-4 py-3">${job.partition}</td>
+            <td class="px-4 py-3">${getStateBadge(job.state)}</td>
+            <td class="px-4 py-3 text-xs text-slate-500" title="${reason}">${reason}</td>
+            <td class="px-4 py-3">${job.nodes}</td>
+            <td class="px-4 py-3">${job.cpus}</td>
+            <td class="px-4 py-3">${job.memory}</td>
+            <td class="px-4 py-3">${job.gres || 'none'}</td>
+            <td class="px-4 py-3">${job.time}</td>
+            <td class="px-4 py-3">
+                ${job.state === 'RUNNING' || job.state === 'R' ? `<button onclick="event.stopPropagation(); suspendJob('${job.job_id}')" class="text-purple-500 hover:text-purple-600 mr-2" title="暂停"><i class="fas fa-pause"></i></button>` : ''}
+                ${job.state === 'SUSPENDED' || job.state === 'S' ? `<button onclick="event.stopPropagation(); resumeJob('${job.job_id}')" class="text-indigo-500 hover:text-indigo-600 mr-2" title="恢复"><i class="fas fa-play"></i></button>` : ''}
+                <button onclick="event.stopPropagation(); cancelJob('${job.job_id}')" class="text-danger-500 hover:text-danger-600 mr-2" title="取消"><i class="fas fa-times"></i></button>
+            </td>
+        </tr>`;
+    });
+    
+    updatePaginationUI();
+}
+
+function updatePaginationUI() {
+    const start = jobsPagination.totalJobs === 0 ? 0 : (jobsPagination.currentPage - 1) * jobsPagination.perPage + 1;
+    const end = Math.min(jobsPagination.currentPage * jobsPagination.perPage, jobsPagination.totalJobs);
+    
+    document.getElementById('jobs-pagination-info').textContent = 
+        `共 ${jobsPagination.totalJobs} 条作业，显示 ${start}-${end}`;
+    document.getElementById('jobs-page-info').textContent = 
+        `第 ${jobsPagination.currentPage} / ${jobsPagination.totalPages} 页`;
+    
+    // 更新按钮状态
+    const firstBtn = document.getElementById('jobs-first-btn');
+    const prevBtn = document.getElementById('jobs-prev-btn');
+    const nextBtn = document.getElementById('jobs-next-btn');
+    const lastBtn = document.getElementById('jobs-last-btn');
+    
+    firstBtn.disabled = jobsPagination.currentPage <= 1;
+    prevBtn.disabled = jobsPagination.currentPage <= 1;
+    nextBtn.disabled = jobsPagination.currentPage >= jobsPagination.totalPages;
+    lastBtn.disabled = jobsPagination.currentPage >= jobsPagination.totalPages;
+}
+
+function changeJobsPerPage() {
+    const select = document.getElementById('jobs-per-page');
+    jobsPagination.perPage = parseInt(select.value);
+    jobsPagination.currentPage = 1; // 重置到第一页
+    applyJobsPagination();
+}
+
+function goToFirstPage() {
+    if (jobsPagination.currentPage > 1) {
+        jobsPagination.currentPage = 1;
+        applyJobsPagination();
+    }
+}
+
+function goToPrevPage() {
+    if (jobsPagination.currentPage > 1) {
+        jobsPagination.currentPage--;
+        applyJobsPagination();
+    }
+}
+
+function goToNextPage() {
+    if (jobsPagination.currentPage < jobsPagination.totalPages) {
+        jobsPagination.currentPage++;
+        applyJobsPagination();
+    }
+}
+
+function goToLastPage() {
+    if (jobsPagination.currentPage < jobsPagination.totalPages) {
+        jobsPagination.currentPage = jobsPagination.totalPages;
+        applyJobsPagination();
+    }
+}
+
+function applyJobsPagination() {
+    // 使用当前过滤条件重新加载作业表格
+    const state = document.getElementById('job-state-filter').value;
+    const partition = document.getElementById('job-partition-filter').value;
+    const search = document.getElementById('job-search').value.toLowerCase();
+    
+    let filtered = allData.jobs || [];
+    if (state) filtered = filtered.filter(j => j.state === state);
+    if (partition) filtered = filtered.filter(j => j.partition === partition);
+    if (search) filtered = filtered.filter(j => j.name.toLowerCase().includes(search) || j.user.toLowerCase().includes(search) || j.job_id.includes(search));
+    
+    loadJobsTable(filtered);
+}
+
+window.loadJobsData = function() { 
+    if (allData.jobs) {
+        jobsPagination.currentPage = 1; // 刷新数据时重置到第一页
+        loadJobsTable(allData.jobs); 
+    }
+};
+
+function updatePartitionFilter(jobs) {
+    const partitions = [...new Set(jobs.map(j => j.partition))];
+    const select = document.getElementById('job-partition-filter');
+    select.innerHTML = '<option value="">所有分区</option>' + partitions.map(p => `<option value="${p}">${p}</option>`).join('');
+}
+
+function toggleJobSelection(jobId) {
+    if (selectedJobs.has(jobId)) selectedJobs.delete(jobId);
+    else selectedJobs.add(jobId);
+    document.getElementById('selected-count').textContent = `已选择 ${selectedJobs.size} 个作业`;
+}
+
+function toggleSelectAll() {
+    const checkboxes = document.querySelectorAll('.job-checkbox');
+    const allChecked = document.getElementById('select-all-jobs').checked;
+    checkboxes.forEach(cb => {
+        cb.checked = allChecked;
+        if (allChecked) selectedJobs.add(cb.value);
+        else selectedJobs.delete(cb.value);
+    });
+    document.getElementById('selected-count').textContent = `已选择 ${selectedJobs.size} 个作业`;
+}
+
+function filterJobs() {
+    const state = document.getElementById('job-state-filter').value;
+    const partition = document.getElementById('job-partition-filter').value;
+    const search = document.getElementById('job-search').value.toLowerCase();
+    let filtered = allData.jobs || [];
+    if (state) filtered = filtered.filter(j => j.state === state);
+    if (partition) filtered = filtered.filter(j => j.partition === partition);
+    if (search) filtered = filtered.filter(j => j.name.toLowerCase().includes(search) || j.user.toLowerCase().includes(search) || j.job_id.includes(search));
+    // 过滤时重置到第一页
+    jobsPagination.currentPage = 1;
+    loadJobsTable(filtered);
+}
+
+function cancelJob(jobId) {
+    if (!confirm(`确定取消作业 ${jobId}?`)) return;
+    
+    fetch(`/api/job/${jobId}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+    }).then(r => r.json()).then(result => {
+        if (result.success) { alert('作业已取消'); refreshData(); }
+        else alert('取消失败: ' + result.message);
+    });
+}
+
+function suspendJob(jobId) {
+    if (!confirm(`确定暂停作业 ${jobId}? 暂停后作业将释放占用的资源。`)) return;
+    
+    fetch('/api/jobs/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_ids: [jobId], action: 'suspend' })
+    }).then(r => r.json()).then(result => {
+        if (result.success) { alert('作业已暂停'); refreshData(); }
+        else alert('暂停失败: ' + result.message);
+    });
+}
+
+function resumeJob(jobId) {
+    if (!confirm(`确定恢复作业 ${jobId}?`)) return;
+    
+    fetch('/api/jobs/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_ids: [jobId], action: 'resume' })
+    }).then(r => r.json()).then(result => {
+        if (result.success) { alert('作业已恢复'); refreshData(); }
+        else alert('恢复失败: ' + result.message);
+    });
+}
+
+// 查看作业输出日志
+async function viewJobOutput(jobId) {
+    // 如果没有传入jobId，使用当前详情页的作业ID
+    const targetJobId = jobId || currentDetailJobId;
+    if (!targetJobId) return;
+    
+    try {
+        // 尝试获取作业输出路径
+        const response = await fetch(`/api/job/${targetJobId}`);
+        const job = await response.json();
+        
+        // scontrol返回的字段名是workdir(小写)
+        const workDir = job.workdir || job.work_dir;
+        if (workDir) {
+            // 显示输出文件路径信息
+            const stdoutPath = `${workDir}/slurm-${targetJobId}.out`;
+            alert(`作业输出文件路径:\n${stdoutPath}\n\n注: 请通过 SSH 查看文件内容。`);
+        } else {
+            alert('无法获取作业工作目录');
+        }
+    } catch (e) {
+        console.error('Failed to get job output path:', e);
+        alert('获取作业输出路径失败');
+    }
+}
+
+function batchAction(action) {
+    if (selectedJobs.size === 0) { alert('请先选择作业'); return; }
+    if (!confirm(`确定对 ${selectedJobs.size} 个作业执行 ${action} 操作?`)) return;
+    
+    fetch('/api/jobs/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_ids: [...selectedJobs], action })
+    }).then(r => r.json()).then(result => {
+        if (result.success) { alert('批量操作成功'); selectedJobs.clear(); refreshData(); }
+        else alert('操作失败: ' + result.message);
+    });
+}
+
+// GPU监控页面 - 按节点分组显示，默认折叠
+function loadGPUCards(gpus, processes) {
+    const container = document.getElementById('gpu-cards');
+    container.innerHTML = '';
+    
+    // 修改容器样式为单列布局
+    container.className = 'space-y-4';
+    
+    if (!gpus || gpus.length === 0) {
+        container.innerHTML = '<div class="text-center py-12 text-slate-500 bg-white rounded-xl shadow-sm border border-slate-200">未检测到 GPU</div>';
+        return;
+    }
+    
+    // 按节点分组
+    const nodeGroups = {};
+    gpus.forEach(gpu => {
+        const node = gpu.node || 'localhost';
+        if (!nodeGroups[node]) {
+            nodeGroups[node] = [];
+        }
+        nodeGroups[node].push(gpu);
+    });
+    
+    // 生成按节点分组的HTML
+    Object.entries(nodeGroups).forEach(([node, nodeGpus], groupIndex) => {
+        // 计算节点统计信息
+        const totalGpus = nodeGpus.length;
+        const activeGpus = nodeGpus.filter(g => parseInt(g.utilization) > 0).length;
+        const avgTemp = Math.round(nodeGpus.reduce((sum, g) => sum + (parseInt(g.temperature) || 0), 0) / totalGpus);
+        const totalMem = nodeGpus.reduce((sum, g) => sum + (parseInt(g.memory_total) || 0), 0);
+        const usedMem = nodeGpus.reduce((sum, g) => sum + (parseInt(g.memory_used) || 0), 0);
+        const memPercent = Math.round((usedMem / totalMem) * 100);
+        
+        // 温度样式
+        const tempClass = avgTemp > 80 ? 'text-red-500' : avgTemp > 60 ? 'text-yellow-500' : 'text-green-500';
+        
+        // 生成节点内GPU卡片
+        const gpuCardsHtml = nodeGpus.map(gpu => {
+            const util = parseInt(gpu.utilization) || 0;
+            const memUsed = parseInt(gpu.memory_used) || 0;
+            const memTotal = parseInt(gpu.memory_total) || 1;
+            const gpuMemPercent = Math.round((memUsed / memTotal) * 100);
+            const temp = parseInt(gpu.temperature) || 0;
+            const gpuTempClass = temp > 80 ? 'text-red-500' : temp > 60 ? 'text-yellow-500' : 'text-green-500';
+            const isActive = util > 0;
+            
+            return `
+                <div class="bg-white rounded-xl p-5 shadow-sm border ${isActive ? 'border-violet-300 ring-1 ring-violet-200' : 'border-slate-200'}">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-2">
+                            <div class="w-8 h-8 ${isActive ? 'bg-violet-100' : 'bg-slate-100'} rounded-lg flex items-center justify-center">
+                                <i class="fas fa-microchip ${isActive ? 'text-violet-600' : 'text-slate-500'}"></i>
+                            </div>
+                            <div>
+                                <h5 class="font-semibold text-slate-800">GPU ${gpu.index}</h5>
+                                <p class="text-xs text-slate-500">${gpu.name.length > 20 ? gpu.name.substring(0, 20) + '...' : gpu.name}</p>
+                            </div>
+                        </div>
+                        <span class="text-xl font-bold ${gpuTempClass}">${temp}°C</span>
+                    </div>
+                    <div class="space-y-2">
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-slate-500">利用率</span>
+                                <span class="font-medium ${util > 80 ? 'text-red-500' : util > 50 ? 'text-yellow-500' : 'text-green-500'}">${util}%</span>
+                            </div>
+                            <div class="progress-bar h-1.5">
+                                <div class="progress-fill bg-violet-500 h-1.5 rounded-full" style="width: ${util}%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-slate-500">显存</span>
+                                <span class="font-medium text-slate-700">${Math.round(memUsed/1024)}G/${Math.round(memTotal/1024)}G</span>
+                            </div>
+                            <div class="progress-bar h-1.5">
+                                <div class="progress-fill bg-blue-500 h-1.5 rounded-full" style="width: ${gpuMemPercent}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3 pt-3 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500">
+                        <span>功耗: ${gpu.power_draw !== 'N/A' ? gpu.power_draw + 'W' : 'N/A'}</span>
+                        <span class="${isActive ? 'text-violet-600 font-medium' : ''}">${isActive ? '使用中' : '空闲'}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        // 创建节点组容器
+        const nodeGroup = document.createElement('div');
+        nodeGroup.className = `bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden ${groupIndex === 0 ? 'expanded' : ''}`;
+        nodeGroup.dataset.node = node;
+        
+        nodeGroup.innerHTML = `
+            <div class="gpu-node-header flex items-center justify-between p-4 bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors" onclick="this.closest('.bg-white').classList.toggle('expanded'); this.querySelector('.gpu-node-toggle i').classList.toggle('fa-chevron-up'); this.querySelector('.gpu-node-toggle i').classList.toggle('fa-chevron-down');">
+                <div class="flex items-center gap-4">
+                    <i class="fas fa-server text-primary-500 text-lg"></i>
+                    <div>
+                        <h4 class="font-semibold text-slate-800">${node}</h4>
+                        <div class="flex gap-4 text-sm text-slate-500 mt-1">
+                            <span><i class="fas fa-microchip mr-1"></i>GPU: <span class="font-medium text-slate-700">${activeGpus}/${totalGpus}</span> 活跃</span>
+                            <span><i class="fas fa-thermometer-half mr-1"></i>平均温度: <span class="font-medium ${tempClass}">${avgTemp}°C</span></span>
+                            <span><i class="fas fa-memory mr-1"></i>显存: <span class="font-medium text-slate-700">${memPercent}%</span></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="gpu-node-toggle text-slate-400">
+                    <i class="fas fa-chevron-${groupIndex === 0 ? 'up' : 'down'}"></i>
+                </div>
+            </div>
+            <div class="gpu-node-content ${groupIndex === 0 ? '' : 'hidden'}" style="max-height: ${groupIndex === 0 ? '2000px' : '0'}; overflow: hidden; transition: max-height 0.3s ease;">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+                    ${gpuCardsHtml}
+                </div>
+            </div>
+        `;
+        
+        // 添加点击展开/折叠功能
+        const header = nodeGroup.querySelector('.gpu-node-header');
+        const content = nodeGroup.querySelector('.gpu-node-content');
+        const toggle = nodeGroup.querySelector('.gpu-node-toggle i');
+        
+        header.addEventListener('click', () => {
+            const isExpanded = !content.classList.contains('hidden');
+            if (isExpanded) {
+                content.style.maxHeight = '0px';
+                setTimeout(() => content.classList.add('hidden'), 300);
+                toggle.classList.remove('fa-chevron-up');
+                toggle.classList.add('fa-chevron-down');
+            } else {
+                content.classList.remove('hidden');
+                content.style.maxHeight = content.scrollHeight + 'px';
+                toggle.classList.remove('fa-chevron-down');
+                toggle.classList.add('fa-chevron-up');
+            }
+        });
+        
+        // 初始化第一个为展开状态
+        if (groupIndex === 0) {
+            setTimeout(() => {
+                content.style.maxHeight = content.scrollHeight + 'px';
+            }, 0);
+        }
+        
+        container.appendChild(nodeGroup);
+    });
+    
+    // 更新GPU进程表格，添加节点列
+    const procBody = document.getElementById('gpu-processes-body');
+    const procCount = document.getElementById('gpu-processes-count');
+    
+    if (processes && processes.length > 0) {
+        procCount.textContent = `(${processes.length} 个进程)`;
+        procBody.innerHTML = processes.map(p => {
+            const node = p.node || 'localhost';
+            return `<tr class="fade-in">
+                <td class="px-6 py-4"><span class="badge badge-primary">${node}</span></td>
+                <td class="px-6 py-4 font-medium">${p.gpu_id}</td>
+                <td class="px-6 py-4 font-mono text-sm">${p.pid}</td>
+                <td class="px-6 py-4">${p.type}</td>
+                <td class="px-6 py-4">${p.sm}%</td>
+                <td class="px-6 py-4">${p.mem}%</td>
+                <td class="px-6 py-4 text-sm font-mono text-slate-600 max-w-md truncate" title="${p.command}">${p.command}</td>
+            </tr>`;
+        }).join('');
+    } else {
+        procCount.textContent = '(无进程)';
+        procBody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-slate-500">暂无 GPU 进程</td></tr>';
+    }
+}
+window.loadGPUData = function() { if (allData.gpus) loadGPUCards(allData.gpus, allData.gpu_processes); };
+
+// GPU 进程栏目折叠切换
+function toggleGPUProcessesSection() {
+    const section = document.getElementById('gpu-processes-section');
+    const content = section.querySelector('.gpu-processes-content');
+    const toggle = section.querySelector('.gpu-processes-toggle');
+    const icon = toggle.querySelector('i');
+    
+    const isExpanded = !content.classList.contains('hidden');
+    
+    if (isExpanded) {
+        // 折叠
+        content.style.maxHeight = content.scrollHeight + 'px';
+        requestAnimationFrame(() => {
+            content.style.maxHeight = '0px';
+        });
+        setTimeout(() => {
+            content.classList.add('hidden');
+        }, 300);
+        icon.classList.remove('fa-chevron-up');
+        icon.classList.add('fa-chevron-down');
+    } else {
+        // 展开
+        content.classList.remove('hidden');
+        requestAnimationFrame(() => {
+            content.style.maxHeight = content.scrollHeight + 'px';
+        });
+        setTimeout(() => {
+            content.style.maxHeight = 'none';
+        }, 300);
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-up');
+    }
+}
+
+// 用户统计页面
+let userCPUChart = null;
+let userGPUChart = null;
+
+async function loadUsersDataWithHistory(days = 7) {
+    try {
+        // 使用新的 API 获取详细的 CPU/GPU 资源使用数据
+        const hours = days * 24;
+        const response = await fetch(`/api/stats/users/detailed?hours=${hours}`);
+        const result = await response.json();
+        
+        if (!result || !result.users || result.users.length === 0) {
+            document.getElementById('users-table-body').innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-slate-500">暂无用户数据</td></tr>';
+            return;
+        }
+        
+        // 更新总时间显示
+        document.getElementById('total-cpu-hours').textContent = (result.total_cpu_minutes / 60).toFixed(2);
+        document.getElementById('total-gpu-hours').textContent = (result.total_gpu_minutes / 60).toFixed(2);
+        
+        // 渲染表格和图表
+        loadUsersTableFromResourceUsage(result.users);
+        updateUserResourceCharts(result.users, result.total_cpu_minutes, result.total_gpu_minutes);
+        
+    } catch (error) {
+        console.error('Failed to load user resource usage:', error);
+        document.getElementById('users-table-body').innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-slate-500">加载失败</td></tr>';
+    }
+}
+
+function loadUsersTableFromResourceUsage(users) {
+    const tbody = document.getElementById('users-table-body');
+    tbody.innerHTML = '';
+    if (!users || users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-8 text-center text-slate-500">暂无用户数据</td></tr>';
+        return;
+    }
+    
+    // 按 CPU 时间排序
+    const sortedUsers = [...users].sort((a, b) => b.cpu_minutes - a.cpu_minutes);
+    
+    sortedUsers.forEach((u, index) => {
+        const cpuHours = (u.cpu_minutes / 60).toFixed(2);
+        const gpuHours = (u.gpu_minutes / 60).toFixed(2);
+        const rank = index + 1;
+        const rankClass = rank <= 3 ? ['text-amber-500', 'text-slate-400', 'text-amber-700'][rank-1] : 'text-slate-500';
+        
+        tbody.innerHTML += `<tr class="fade-in">
+            <td class="px-6 py-4 font-bold ${rankClass}">${rank}</td>
+            <td class="px-6 py-4 font-medium">${u.user}</td>
+            <td class="px-6 py-4">${u.jobs}</td>
+            <td class="px-6 py-4">${cpuHours}</td>
+            <td class="px-6 py-4">
+                <div class="flex items-center gap-2">
+                    <div class="w-16 progress-bar">
+                        <div class="progress-fill bg-blue-500" style="width: ${u.cpu_percent}%"></div>
+                    </div>
+                    <span class="text-sm">${u.cpu_percent}%</span>
+                </div>
+            </td>
+            <td class="px-6 py-4">${gpuHours > 0 ? gpuHours : '-'}</td>
+            <td class="px-6 py-4">
+                ${u.gpu_percent > 0 ? `<div class="flex items-center gap-2">
+                    <div class="w-16 progress-bar">
+                        <div class="progress-fill bg-violet-500" style="width: ${u.gpu_percent}%"></div>
+                    </div>
+                    <span class="text-sm">${u.gpu_percent}%</span>
+                </div>` : '-'}
+            </td>
+        </tr>`;
+    });
+}
+
+function updateUserResourceCharts(users, totalCpuMinutes, totalGpuMinutes) {
+    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#14b8a6'];
+    
+    // 准备 CPU 数据 - 按 CPU 时间排序，取前10
+    const sortedByCPU = [...users].sort((a, b) => b.cpu_minutes - a.cpu_minutes).slice(0, 10);
+    const cpuLabels = sortedByCPU.map(u => u.user);
+    const cpuData = sortedByCPU.map(u => (u.cpu_minutes / 60).toFixed(2)); // 转换为小时
+    const cpuPercentages = sortedByCPU.map(u => u.cpu_percent);
+    
+    // 准备 GPU 数据 - 按 GPU 时间排序，取前10（只包含有 GPU 使用的用户）
+    const usersWithGPU = users.filter(u => u.gpu_minutes > 0).sort((a, b) => b.gpu_minutes - a.gpu_minutes).slice(0, 10);
+    const gpuLabels = usersWithGPU.map(u => u.user);
+    const gpuData = usersWithGPU.map(u => (u.gpu_minutes / 60).toFixed(2)); // 转换为小时
+    const gpuPercentages = usersWithGPU.map(u => u.gpu_percent);
+    
+    // CPU 时间分布图表
+    if (userCPUChart) userCPUChart.destroy();
+    userCPUChart = new Chart(document.getElementById('user-cpu-chart'), {
+        type: 'bar',
+        data: {
+            labels: cpuLabels,
+            datasets: [{
+                label: 'CPU时间(小时)',
+                data: cpuData,
+                backgroundColor: colors,
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const idx = context.dataIndex;
+                            const percent = cpuPercentages[idx];
+                            return `CPU时间: ${context.raw} 小时 (${percent}%)`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: '小时'
+                    }
+                },
+                x: {
+                    ticks: {
+                        maxRotation: 45,
+                        minRotation: 45
+                    }
+                }
+            }
+        }
+    });
+    
+    // GPU 时间分布图表
+    if (userGPUChart) userGPUChart.destroy();
+    if (usersWithGPU.length > 0) {
+        userGPUChart = new Chart(document.getElementById('user-gpu-chart'), {
+            type: 'bar',
+            data: {
+                labels: gpuLabels,
+                datasets: [{
+                    label: 'GPU时间(小时)',
+                    data: gpuData,
+                    backgroundColor: colors,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const idx = context.dataIndex;
+                                const percent = gpuPercentages[idx];
+                                return `GPU时间: ${context.raw} 小时 (${percent}%)`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: '小时'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45
+                        }
+                    }
+                }
+            }
+        });
+    } else {
+        // 没有 GPU 数据时显示提示
+        document.getElementById('user-gpu-chart').innerHTML = '<div class="flex items-center justify-center h-full text-slate-400">暂无 GPU 使用数据</div>';
+    }
+}
+
+window.loadUsersData = function() { 
+    loadUsersDataWithHistory(7); 
+};
+
+// 分区信息页面
+function loadPartitionsTable(partitions, stats) {
+    const grid = document.getElementById('partitions-grid');
+    grid.innerHTML = '';
+    if (!partitions || partitions.length === 0) {
+        grid.innerHTML = '<div class="col-span-full text-center py-12 text-slate-500">暂无分区数据</div>';
+        return;
+    }
+    partitions.forEach(p => {
+        grid.innerHTML += `<div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+            <div class="flex items-center justify-between mb-4">
+                <h4 class="font-semibold text-lg">${p.partitionname}</h4>
+                <span class="badge ${p.state === 'UP' ? 'badge-success' : 'badge-danger'}">${p.state}</span>
+            </div>
+            <div class="space-y-2 text-sm">
+                <div class="flex justify-between"><span class="text-slate-500">节点:</span><span>${p.nodes || 'N/A'}</span></div>
+                <div class="flex justify-between"><span class="text-slate-500">默认时间:</span><span>${p.defaulttime || 'N/A'}</span></div>
+                <div class="flex justify-between"><span class="text-slate-500">最大时间:</span><span>${p.maxtime || 'N/A'}</span></div>
+            </div>
+        </div>`;
+    });
+    
+    const tbody = document.getElementById('partition-stats-body');
+    tbody.innerHTML = '';
+    if (stats) {
+        Object.entries(stats).forEach(([name, s]) => {
+            tbody.innerHTML += `<tr class="fade-in"><td class="px-6 py-4 font-medium">${name}</td><td class="px-6 py-4">${s.running}</td><td class="px-6 py-4">${s.pending}</td><td class="px-6 py-4">${s.total}</td></tr>`;
+        });
+    }
+}
+window.loadPartitionsData = function() { if (allData.partitions) loadPartitionsTable(allData.partitions, allData.partition_stats); };
+
+// 统计报表页面 - 增强版
+window.loadStatistics = async function() {
+    const hours = parseInt(document.getElementById('stats-time-range').value);
+    
+    // 根据选择的时间范围决定图表粒度
+    const rangeLabel = hours <= 24 ? '24小时' : hours <= 168 ? '7天' : hours <= 720 ? '30天' : '90天';
+    
+    try {
+        // 并行加载所有统计数据
+        const [jobStats, jobDist, durationDist, hourlyTrend, dailyTrend, waitAnalysis, partitionUsage, nodeEfficiency] = await Promise.all([
+            fetch(`/api/stats/jobs?hours=${hours}`).then(r => r.json()),
+            fetch(`/api/stats/job-distribution?hours=${hours}`).then(r => r.json()),
+            fetch(`/api/stats/duration-distribution?hours=${hours}`).then(r => r.json()),
+            fetch(`/api/stats/hourly-trend?hours=${hours}`).then(r => r.json()),
+            fetch(`/api/stats/daily-trend?days=${Math.ceil(hours/24)}`).then(r => r.json()),
+            fetch(`/api/stats/wait-time-analysis?hours=${hours}`).then(r => r.json()),
+            fetch(`/api/stats/partition-usage?hours=${hours}`).then(r => r.json()),
+            fetch(`/api/stats/node-efficiency?days=${Math.ceil(hours/24)}`).then(r => r.json())
+        ]);
+        
+        // 更新概览统计
+        document.getElementById('stats-completed').textContent = jobStats.completed;
+        document.getElementById('stats-failed').textContent = jobStats.failed;
+        const successRate = jobStats.total > 0 ? Math.round(jobStats.completed / jobStats.total * 100) : 0;
+        document.getElementById('stats-success-rate').textContent = successRate + '%';
+        document.getElementById('stats-cpu-hours').textContent = Math.round(jobStats.total_cpu_hours);
+        
+        // 更新图表标题显示当前时间范围
+        document.getElementById('hourly-chart-range').textContent = `(${rangeLabel})`;
+        document.getElementById('daily-chart-range').textContent = `(${rangeLabel})`;
+        
+        // 更新图表
+        updateStatsCharts(jobDist, durationDist, hourlyTrend, dailyTrend, waitAnalysis, hours);
+        
+        // 更新等待时间分析
+        if (waitAnalysis.count > 0) {
+            document.getElementById('wait-avg').textContent = formatMinutes(waitAnalysis.avg_minutes);
+            document.getElementById('wait-median').textContent = formatMinutes(waitAnalysis.median_minutes);
+            document.getElementById('wait-min').textContent = formatMinutes(waitAnalysis.min_minutes);
+            document.getElementById('wait-max').textContent = formatMinutes(waitAnalysis.max_minutes);
+        }
+        
+        // 更新分区使用情况
+        updatePartitionUsageTable(partitionUsage);
+        
+        // 更新节点效率排行
+        updateNodeEfficiencyTable(nodeEfficiency);
+        
+        // 加载用户排行
+        const topUsers = await fetch(`/api/stats/users/top?days=${Math.ceil(hours/24)}&top=10`).then(r => r.json());
+        updateUserRankTables(topUsers);
+        
+    } catch (e) {
+        console.error('Failed to load statistics:', e);
+    }
+};
+
+function updateStatsCharts(jobDist, durationDist, hourlyTrend, dailyTrend, waitAnalysis, hours) {
+    const colors = ['#22c55e', '#f59e0b', '#8b5cf6', '#ef4444', '#3b82f6', '#06b6d4'];
+    
+    // 作业状态分布饼图
+    if (statsJobStateChart) statsJobStateChart.destroy();
+    statsJobStateChart = new Chart(document.getElementById('stats-job-state-chart'), {
+        type: 'pie',
+        data: {
+            labels: Object.keys(jobDist),
+            datasets: [{ data: Object.values(jobDist), backgroundColor: colors }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+    });
+    
+    // 作业时长分布柱状图
+    if (statsDurationChart) statsDurationChart.destroy();
+    statsDurationChart = new Chart(document.getElementById('stats-duration-chart'), {
+        type: 'bar',
+        data: {
+            labels: Object.keys(durationDist),
+            datasets: [{ label: '作业数', data: Object.values(durationDist), backgroundColor: '#3b82f6' }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+    });
+    
+    // 小时趋势折线图 - 根据时间范围调整显示
+    if (statsHourlyChart) statsHourlyChart.destroy();
+    
+    // 判断数据源：24小时使用小时数据，更长时间使用日数据
+    const isShortRange = hours <= 24;
+    const trendLabels = isShortRange 
+        ? Object.keys(hourlyTrend).map(h => h + ':00')
+        : Object.keys(dailyTrend).map(d => d.substring(5)); // 从日期中提取 MM-DD
+    const trendData = isShortRange ? Object.values(hourlyTrend) : Object.values(dailyTrend);
+    const trendLabel = isShortRange ? '作业数/小时' : '作业数/天';
+    
+    statsHourlyChart = new Chart(document.getElementById('stats-hourly-chart'), {
+        type: 'line',
+        data: {
+            labels: trendLabels,
+            datasets: [{ 
+                label: trendLabel, 
+                data: trendData, 
+                borderColor: '#3b82f6', 
+                tension: 0.4, 
+                fill: true, 
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                pointRadius: isShortRange ? 3 : 4,
+                pointHoverRadius: isShortRange ? 5 : 6
+            }]
+        },
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            plugins: { legend: { display: false } },
+            scales: {
+                x: {
+                    ticks: {
+                        maxRotation: isShortRange ? 0 : 45,
+                        autoSkip: true,
+                        maxTicksLimit: isShortRange ? 12 : 15
+                    }
+                }
+            }
+        }
+    });
+    
+    // 日趋势柱状图
+    if (statsDailyChart) statsDailyChart.destroy();
+    statsDailyChart = new Chart(document.getElementById('stats-daily-chart'), {
+        type: 'bar',
+        data: {
+            labels: Object.keys(dailyTrend).map(d => d.substring(5)), // 从日期中提取 MM-DD
+            datasets: [{ label: '作业数', data: Object.values(dailyTrend), backgroundColor: '#10b981' }]
+        },
+        options: { 
+            responsive: true, 
+            maintainAspectRatio: false, 
+            plugins: { legend: { display: false } },
+            scales: {
+                x: {
+                    ticks: {
+                        maxRotation: 45,
+                        autoSkip: true,
+                        maxTicksLimit: 15
+                    }
+                }
+            }
+        }
+    });
+    
+    // 等待时间分布饼图
+    if (waitAnalysis.distribution) {
+        if (statsWaitChart) statsWaitChart.destroy();
+        statsWaitChart = new Chart(document.getElementById('stats-wait-chart'), {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(waitAnalysis.distribution),
+                datasets: [{ data: Object.values(waitAnalysis.distribution), backgroundColor: colors }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'right' } } }
+        });
+    }
+}
+
+function updatePartitionUsageTable(partitionUsage) {
+    const tbody = document.getElementById('partition-usage-body');
+    tbody.innerHTML = '';
+    if (!partitionUsage || Object.keys(partitionUsage).length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-slate-500">暂无分区数据</td></tr>';
+        return;
+    }
+    Object.entries(partitionUsage).forEach(([name, data]) => {
+        const successRate = data.jobs > 0 ? Math.round(data.completed / data.jobs * 100) : 0;
+        tbody.innerHTML += `<tr class="fade-in">
+            <td class="px-6 py-4 font-medium">${name}</td>
+            <td class="px-6 py-4">${data.jobs}</td>
+            <td class="px-6 py-4">${data.completed}</td>
+            <td class="px-6 py-4">${data.failed}</td>
+            <td class="px-6 py-4"><div class="flex items-center gap-2"><div class="w-16 progress-bar"><div class="progress-fill ${successRate >= 80 ? 'bg-success-500' : successRate >= 50 ? 'bg-warning-500' : 'bg-danger-500'}" style="width: ${successRate}%"></div></div><span>${successRate}%</span></div></td>
+            <td class="px-6 py-4">${Math.round(data.cpu_hours)}</td>
+        </tr>`;
+    });
+}
+
+function updateNodeEfficiencyTable(nodeEfficiency) {
+    const tbody = document.getElementById('node-efficiency-body');
+    tbody.innerHTML = '';
+    if (!nodeEfficiency || nodeEfficiency.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-slate-500">暂无节点数据</td></tr>';
+        return;
+    }
+    nodeEfficiency.forEach((node, index) => {
+        tbody.innerHTML += `<tr class="fade-in">
+            <td class="px-6 py-4"><span class="font-bold ${index < 3 ? 'text-amber-500' : 'text-slate-500'}">${index + 1}</span></td>
+            <td class="px-6 py-4 font-medium">${node.name}</td>
+            <td class="px-6 py-4">${node.allocated.toFixed(1)}%</td>
+            <td class="px-6 py-4">${node.idle.toFixed(1)}%</td>
+            <td class="px-6 py-4">${node.down.toFixed(1)}%</td>
+            <td class="px-6 py-4"><div class="flex items-center gap-2"><div class="w-16 progress-bar"><div class="progress-fill ${node.efficiency >= 80 ? 'bg-success-500' : node.efficiency >= 50 ? 'bg-warning-500' : 'bg-danger-500'}" style="width: ${node.efficiency}%"></div></div><span>${node.efficiency}%</span></div></td>
+        </tr>`;
+    });
+}
+
+function updateUserRankTables(topUsers) {
+    const cpuBody = document.getElementById('user-rank-cpu-body');
+    const jobsBody = document.getElementById('user-rank-jobs-body');
+    cpuBody.innerHTML = '';
+    jobsBody.innerHTML = '';
+    topUsers.forEach((u, i) => {
+        const rankClass = i < 3 ? ['text-amber-500', 'text-slate-400', 'text-amber-700'][i] : 'text-slate-500';
+        cpuBody.innerHTML += `<tr class="fade-in"><td class="px-6 py-4"><span class="font-bold ${rankClass}">${i+1}</span></td><td class="px-6 py-4 font-medium">${u.login}</td><td class="px-6 py-4">${u.cpu_time}</td><td class="px-6 py-4">${u.jobs}</td></tr>`;
+    });
+    [...topUsers].sort((a,b) => parseInt(b.jobs) - parseInt(a.jobs)).forEach((u, i) => {
+        const rankClass = i < 3 ? ['text-amber-500', 'text-slate-400', 'text-amber-700'][i] : 'text-slate-500';
+        jobsBody.innerHTML += `<tr class="fade-in"><td class="px-6 py-4"><span class="font-bold ${rankClass}">${i+1}</span></td><td class="px-6 py-4 font-medium">${u.login}</td><td class="px-6 py-4">${u.jobs}</td><td class="px-6 py-4">${u.cpu_time}</td></tr>`;
+    });
+}
+
+function loadAllStatistics() {
+    window.loadStatistics();
+}
+
+function formatMinutes(minutes) {
+    if (!minutes) return '-';
+    if (minutes < 60) return Math.round(minutes) + ' 分钟';
+    if (minutes < 1440) return Math.round(minutes / 60) + ' 小时';
+    return Math.round(minutes / 1440) + ' 天';
+}
+
+function exportStats(type) {
+    const hours = document.getElementById('stats-time-range').value;
+    window.open(`/api/stats/export?type=${type}&hours=${hours}`, '_blank');
+}
+
+// 作业提交
+function showSubmitJobModal() {
+    document.getElementById('submit-job-modal').classList.add('active');
+    loadPartitions();
+    loadQOS();
+}
+function closeSubmitJobModal() { document.getElementById('submit-job-modal').classList.remove('active'); }
+async function loadPartitions() {
+    try {
+        const response = await fetch('/api/partitions');
+        const partitions = await response.json();
+        const select = document.getElementById('job-partition-select');
+        select.innerHTML = '<option value="">选择分区</option>' + partitions.map(p => `<option value="${p.partitionname}">${p.partitionname}</option>`).join('');
+    } catch (e) {}
+}
+async function loadQOS() {
+    try {
+        const response = await fetch('/api/qos');
+        const qosList = await response.json();
+        const select = document.getElementById('job-qos-select');
+        select.innerHTML = '<option value="">默认QOS</option>' + qosList.map(q => `<option value="${q.name}">${q.name}</option>`).join('');
+    } catch (e) {}
+}
+// 文件列表更新
+function updateFileList(input) {
+    const fileList = document.getElementById('file-list');
+    if (!input.files || input.files.length === 0) {
+        fileList.innerHTML = '';
+        return;
+    }
+    
+    const files = Array.from(input.files);
+    fileList.innerHTML = files.map((file, index) => `
+        <div class="flex items-center justify-between bg-slate-50 rounded px-3 py-2 text-sm">
+            <div class="flex items-center gap-2 overflow-hidden">
+                <i class="fas fa-file text-slate-400"></i>
+                <span class="truncate" title="${file.name}">${file.name}</span>
+                <span class="text-slate-400 text-xs">(${(file.size / 1024).toFixed(1)} KB)</span>
+            </div>
+            <button type="button" onclick="removeFile(${index})" class="text-slate-400 hover:text-danger-500">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `).join('');
+}
+
+// 移除文件
+function removeFile(index) {
+    const input = document.getElementById('job-files');
+    const dt = new DataTransfer();
+    const files = Array.from(input.files);
+    files.splice(index, 1);
+    files.forEach(file => dt.items.add(file));
+    input.files = dt.files;
+    updateFileList(input);
+}
+
+async function submitJob() {
+    const form = document.getElementById('submit-job-form');
+    const formData = new FormData(form);
+    
+    // 获取当前登录用户
+    const currentUsername = window.currentUsername;
+    if (!currentUsername) {
+        alert('请先登录');
+        window.location.href = '/login';
+        return;
+    }
+    
+    // 使用当前登录用户
+    formData.set('username', currentUsername);
+    
+    // 验证分区
+    if (!formData.get('partition')) {
+        alert('请选择分区');
+        document.getElementById('job-partition-select').focus();
+        return;
+    }
+    
+    showLoading();
+    try {
+        const response = await fetch('/api/jobs/submit', {
+            method: 'POST',
+            body: formData  // 使用 FormData 支持文件上传
+        });
+        const result = await response.json();
+        if (result.success) { 
+            let msg = `作业提交成功！作业ID: ${result.job_id}`;
+            if (result.work_dir) {
+                msg += `\n\n工作目录: ${result.work_dir}`;
+            }
+            if (result.uploaded_files && result.uploaded_files.length > 0) {
+                msg += `\n\n已上传文件: ${result.uploaded_files.length} 个`;
+            }
+            alert(msg); 
+            closeSubmitJobModal(); 
+            // 清空表单
+            document.getElementById('job-files').value = '';
+            document.getElementById('file-list').innerHTML = '';
+            refreshData(); 
+        }
+        else alert('提交失败: ' + result.message);
+    } catch (e) { alert('提交失败: ' + e.message); }
+    finally { hideLoading(); }
+}
+
+// 自动刷新
+function toggleAutoRefresh() {
+    autoRefresh = !autoRefresh;
+    const btn = document.getElementById('auto-refresh-btn');
+    const icon = document.getElementById('auto-refresh-icon');
+    if (autoRefresh) {
+        btn.classList.add('bg-primary-50', 'text-primary-600');
+        icon.classList.add('fa-spin');
+        autoRefreshInterval = setInterval(() => refreshData(), 5000);
+    } else {
+        btn.classList.remove('bg-primary-50', 'text-primary-600');
+        icon.classList.remove('fa-spin');
+        clearInterval(autoRefreshInterval);
+    }
+}
+
+// 节点过滤
+function filterNodes() {
+    const state = document.getElementById('node-state-filter').value;
+    const search = document.getElementById('node-search').value.toLowerCase();
+    let filtered = allData.nodes || [];
+    if (state) filtered = filtered.filter(n => n.state.toLowerCase().includes(state.toLowerCase()));
+    if (search) filtered = filtered.filter(n => n.name.toLowerCase().includes(search));
+    loadNodesTable(filtered);
+}
+
+// viewNodeDetail 函数现在在 base.html 中定义，使用抽屉式展示
+// 如果需要在当前页面覆盖，可以取消下面的注释
+// function viewNodeDetail(nodeName) {
+//     showNodeDetail(nodeName);
+// }
+
+// ============== 预留管理功能 ==============
+let currentReservations = [];
+
+function loadReservations() {
+    fetch('/api/reservations')
+        .then(res => res.json())
+        .then(data => {
+            currentReservations = data;
+            renderReservations(data);
+        })
+        .catch(err => {
+            console.error('加载预留失败:', err);
+            document.getElementById('reservations-table-body').innerHTML = `
+                <tr>
+                    <td colspan="7" class="px-6 py-8 text-center text-red-500">
+                        <i class="fas fa-exclamation-circle mr-2"></i>加载失败
+                    </td>
+                </tr>
+            `;
+        });
+}
+
+function renderReservations(data) {
+    const tbody = document.getElementById('reservations-table-body');
+    
+    if (!data || data.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="px-6 py-8 text-center text-slate-500">
+                    <i class="fas fa-inbox mr-2"></i>暂无预留信息
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = data.map(res => {
+        const stateClass = res.state && res.state.toUpperCase().includes('ACTIVE') ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600';
+        const users = res.users || '';
+        const displayUsers = users || 'N/A';
+        return `
+            <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                <td class="px-6 py-4 font-medium text-slate-800">${res.reservationname || '-'}</td>
+                <td class="px-6 py-4"><span class="px-3 py-1 rounded-full text-xs font-medium ${stateClass}">${res.state || '-'}</span></td>
+                <td class="px-6 py-4 text-slate-600">${res.nodes || '-'}</td>
+                <td class="px-6 py-4 text-slate-600 text-sm">${displayUsers}</td>
+                <td class="px-6 py-4 text-slate-600">${res.starttime || '-'}</td>
+                <td class="px-6 py-4 text-slate-600">${res.endtime || '-'}</td>
+                <td class="px-6 py-4 text-slate-600">${res.duration || '-'}</td>
+                <td class="px-6 py-4">
+                    <button onclick="confirmDeleteReservation('${res.reservationname}')" class="text-red-600 hover:text-red-800" title="删除">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function openCreateReservationModal() {
+    const modal = document.getElementById('create-reservation-modal');
+    if (!modal) {
+        // 创建模态框
+        const modalHtml = `
+        <div id="create-reservation-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50">
+            <div class="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4">
+                <div class="p-6 border-b border-slate-200">
+                    <h3 class="text-lg font-semibold text-slate-800">创建资源预留</h3>
+                </div>
+                <div class="p-6 space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">预留名称 *</label>
+                        <input type="text" id="res-name" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500" placeholder="例如: maintenance_001">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">节点列表 *</label>
+                        <input type="text" id="res-nodes" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500" placeholder="例如: node001 或 node[001-010]">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">开始时间 *</label>
+                        <input type="text" id="res-starttime" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500" placeholder="例如: now 或 2024-01-01T10:00:00">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">持续时间 *</label>
+                        <input type="text" id="res-duration" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500" placeholder="例如: 02:00:00 或 4:00:00">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">授权用户</label>
+                        <input type="text" id="res-users" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500" placeholder="用户名，逗号分隔">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">授权账户</label>
+                        <input type="text" id="res-accounts" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500" placeholder="账户名，逗号分隔">
+                    </div>
+                </div>
+                <div class="p-6 border-t border-slate-200 flex justify-end gap-3">
+                    <button onclick="closeCreateReservationModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors">取消</button>
+                    <button onclick="createReservation()" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors">创建</button>
+                </div>
+            </div>
+        </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+    document.getElementById('create-reservation-modal').classList.remove('hidden');
+    document.getElementById('create-reservation-modal').classList.add('flex');
+}
+
+function closeCreateReservationModal() {
+    const modal = document.getElementById('create-reservation-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        document.getElementById('res-name').value = '';
+        document.getElementById('res-nodes').value = '';
+        document.getElementById('res-starttime').value = '';
+        document.getElementById('res-duration').value = '';
+        document.getElementById('res-users').value = '';
+        document.getElementById('res-accounts').value = '';
+    }
+}
+
+function createReservation() {
+    const data = {
+        reservationname: document.getElementById('res-name').value,
+        nodes: document.getElementById('res-nodes').value,
+        starttime: document.getElementById('res-starttime').value,
+        duration: document.getElementById('res-duration').value,
+        users: document.getElementById('res-users').value || 'root',
+        accounts: document.getElementById('res-accounts').value
+    };
+    
+    if (!data.reservationname || !data.nodes || !data.starttime || !data.duration) {
+        alert('请填写所有必填字段');
+        return;
+    }
+    
+    fetch('/api/reservations', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(res => res.json())
+    .then(result => {
+        if (result.error) {
+            alert('创建失败: ' + result.error);
+        } else {
+            closeCreateReservationModal();
+            loadReservations();
+        }
+    })
+    .catch(err => alert('创建失败: ' + err));
+}
+
+function confirmDeleteReservation(name) {
+    if (confirm(`确定要删除预留 "${name}" 吗？`)) {
+        fetch(`/api/reservations/${name}`, {method: 'DELETE'})
+            .then(res => res.json())
+            .then(result => {
+                if (result.error) {
+                    alert('删除失败: ' + result.error);
+                } else {
+                    loadReservations();
+                }
+            })
+            .catch(err => alert('删除失败: ' + err));
+    }
+}
+
+// ============== 节点监控数据加载时同时加载预留 ==============
+const originalLoadNodesData = window.loadNodesData;
+window.loadNodesData = function() {
+    if (originalLoadNodesData) originalLoadNodesData();
+    loadReservations();
+};
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    initCharts();
+    fetch('/api/allsystems').then(r => r.json()).then(data => {
+        allData = data;
+        window.allData = data;
+        window.onDataUpdate(data);
+    });
+});
+</script>
+{% endblock %}

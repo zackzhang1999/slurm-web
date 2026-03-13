@@ -1,0 +1,611 @@
+{% extends "base.html" %}
+
+{% block title %}账户管理 - Slurm 集群监控系统{% endblock %}
+{% block page_title %}账户管理{% endblock %}
+{% block page_subtitle %}管理 Slurm 账户和用户关联{% endblock %}
+
+{% block content %}
+<!-- 统计卡片 -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+    <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200 card-hover">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                <i class="fas fa-folder text-blue-600 text-xl"></i>
+            </div>
+            <div>
+                <p class="text-sm text-slate-500">账户数量</p>
+                <p class="text-2xl font-bold text-slate-800" id="stat-accounts">-</p>
+            </div>
+        </div>
+    </div>
+    <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200 card-hover">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                <i class="fas fa-user text-green-600 text-xl"></i>
+            </div>
+            <div>
+                <p class="text-sm text-slate-500">用户数量</p>
+                <p class="text-2xl font-bold text-slate-800" id="stat-users">-</p>
+            </div>
+        </div>
+    </div>
+    <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200 card-hover">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                <i class="fas fa-link text-purple-600 text-xl"></i>
+            </div>
+            <div>
+                <p class="text-sm text-slate-500">关联数量</p>
+                <p class="text-2xl font-bold text-slate-800" id="stat-assocs">-</p>
+            </div>
+        </div>
+    </div>
+    <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200 card-hover">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
+                <i class="fas fa-server text-orange-600 text-xl"></i>
+            </div>
+            <div>
+                <p class="text-sm text-slate-500">集群数量</p>
+                <p class="text-2xl font-bold text-slate-800" id="stat-clusters">-</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tab 导航 -->
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-2 mb-6 inline-flex">
+    <button class="tab-btn active" onclick="switchTab('accounts', this)">
+        <i class="fas fa-folder-tree mr-2"></i>账户层级
+    </button>
+    <button class="tab-btn" onclick="switchTab('users', this)">
+        <i class="fas fa-users mr-2"></i>用户列表
+    </button>
+    <button class="tab-btn" onclick="switchTab('help', this)">
+        <i class="fas fa-book mr-2"></i>使用帮助
+    </button>
+</div>
+
+<!-- 账户层级 Tab -->
+<div id="tab-accounts" class="tab-content active">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+        <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-slate-800">
+                <i class="fas fa-folder-tree text-primary-500 mr-2"></i>账户层级结构
+            </h3>
+            <button onclick="openAccountModal()" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors admin-only">
+                <i class="fas fa-plus mr-2"></i>新建账户
+            </button>
+        </div>
+        <div class="p-6">
+            <div id="accounts-loading" class="flex items-center justify-center py-12 text-slate-500">
+                <div class="spinner mr-3"></div>加载中...
+            </div>
+            <div id="accounts-content" class="hidden">
+                <div id="account-tree" class="space-y-2"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 用户列表 Tab -->
+<div id="tab-users" class="tab-content">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+        <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-slate-800">
+                <i class="fas fa-users text-primary-500 mr-2"></i>用户列表
+            </h3>
+            <button onclick="openUserModal()" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors admin-only">
+                <i class="fas fa-user-plus mr-2"></i>添加用户
+            </button>
+        </div>
+        <div class="overflow-x-auto">
+            <div id="users-loading" class="flex items-center justify-center py-12 text-slate-500">
+                <div class="spinner mr-3"></div>加载中...
+            </div>
+            <div id="users-content" class="hidden">
+                <table class="w-full table-modern">
+                    <thead>
+                        <tr>
+                            <th class="px-6 py-3 text-left">用户名</th>
+                            <th class="px-6 py-3 text-left">默认账户</th>
+                            <th class="px-6 py-3 text-left">管理员级别</th>
+                            <th class="px-6 py-3 text-left">关联</th>
+                            <th class="px-6 py-3 text-left">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-table"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 使用帮助 Tab -->
+<div id="tab-help" class="tab-content">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+        <div class="p-6 border-b border-slate-200">
+            <h3 class="text-lg font-semibold text-slate-800">
+                <i class="fas fa-book text-primary-500 mr-2"></i>使用帮助
+            </h3>
+        </div>
+        <div class="p-6 space-y-6">
+            <div>
+                <h4 class="text-base font-medium text-slate-800 mb-2">什么是 Slurm 账户?</h4>
+                <p class="text-slate-600 leading-relaxed">
+                    Slurm 账户用于组织和管理用户。账户可以形成层级结构，便于资源分配和计费管理。
+                    每个用户可以关联到一个或多个账户，作业提交时需要指定账户。
+                </p>
+            </div>
+            <div>
+                <h4 class="text-base font-medium text-slate-800 mb-2">常用命令</h4>
+                <div class="bg-slate-900 rounded-lg p-4 font-mono text-sm text-slate-300 overflow-x-auto">
+                    <div class="mb-2"><span class="text-slate-500"># 查看账户</span></div>
+                    <div class="mb-4">sacctmgr show account</div>
+                    <div class="mb-2"><span class="text-slate-500"># 查看用户关联</span></div>
+                    <div class="mb-4">sacctmgr show assoc user=username</div>
+                    <div class="mb-2"><span class="text-slate-500"># 提交作业指定账户</span></div>
+                    <div>sbatch --account=science myjob.sh</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 新建账户模态框 -->
+<div id="account-modal" class="modal">
+    <div class="modal-content">
+        <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+            <h3 class="text-lg font-semibold"><i class="fas fa-folder-plus text-primary-500 mr-2"></i>新建账户</h3>
+            <button onclick="closeModal('account-modal')" class="text-slate-400 hover:text-slate-600">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="p-6">
+            <form id="account-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">账户名称 *</label>
+                    <input type="text" id="acc-name" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="例如: science">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">描述</label>
+                        <input type="text" id="acc-desc" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="账户描述">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">组织</label>
+                        <input type="text" id="acc-org" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="所属组织">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">父账户</label>
+                    <select id="acc-parent" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                        <option value="">root (根账户)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">管理员密码</label>
+                    <input type="password" id="acc-password" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="输入管理员密码">
+                </div>
+            </form>
+        </div>
+        <div class="p-6 border-t border-slate-200 flex justify-end gap-3">
+            <button onclick="closeModal('account-modal')" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">取消</button>
+            <button onclick="createAccount()" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors">创建</button>
+        </div>
+    </div>
+</div>
+
+<!-- 添加用户模态框 -->
+<div id="user-modal" class="modal">
+    <div class="modal-content">
+        <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+            <h3 class="text-lg font-semibold"><i class="fas fa-user-plus text-primary-500 mr-2"></i>添加用户</h3>
+            <button onclick="closeModal('user-modal')" class="text-slate-400 hover:text-slate-600">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="p-6">
+            <form id="user-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">用户名 *</label>
+                    <input type="text" id="user-name" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="Linux 用户名">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">默认账户 *</label>
+                    <select id="user-account" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                        <option value="">选择账户</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">集群</label>
+                        <input type="text" id="user-cluster" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="默认所有集群">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">分区</label>
+                        <input type="text" id="user-partition" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="默认所有分区">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">管理员级别</label>
+                    <select id="user-admin" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                        <option value="None">无</option>
+                        <option value="Operator">操作员</option>
+                        <option value="Admin">管理员</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">管理员密码</label>
+                    <input type="password" id="user-password" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="输入管理员密码">
+                </div>
+            </form>
+        </div>
+        <div class="p-6 border-t border-slate-200 flex justify-end gap-3">
+            <button onclick="closeModal('user-modal')" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">取消</button>
+            <button onclick="createUser()" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors">添加</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let accounts = [];
+let users = [];
+let associations = [];
+
+// 加载所有数据
+async function loadAllData() {
+    await Promise.all([
+        loadAccounts(),
+        loadUsers(),
+        loadAssociations()
+    ]);
+    updateStats();
+}
+
+// 加载账户
+async function loadAccounts() {
+    try {
+        const response = await fetch('/api/accounts');
+        accounts = await response.json();
+        
+        // 填充选择框
+        const parentSelect = document.getElementById('acc-parent');
+        const userAccSelect = document.getElementById('user-account');
+        
+        parentSelect.innerHTML = '<option value="">root (根账户)</option>';
+        userAccSelect.innerHTML = '<option value="">选择账户</option>';
+        
+        accounts.forEach(acc => {
+            parentSelect.innerHTML += `<option value="${acc.name}">${acc.name}</option>`;
+            userAccSelect.innerHTML += `<option value="${acc.name}">${acc.name}</option>`;
+        });
+        
+        renderAccountTree();
+        document.getElementById('accounts-loading').classList.add('hidden');
+        document.getElementById('accounts-content').classList.remove('hidden');
+    } catch (error) {
+        console.error('Error loading accounts:', error);
+        document.getElementById('accounts-loading').textContent = '加载失败';
+    }
+}
+
+// 加载用户
+async function loadUsers() {
+    try {
+        const response = await fetch('/api/users');
+        users = await response.json();
+        renderUsersTable();
+        document.getElementById('users-loading').classList.add('hidden');
+        document.getElementById('users-content').classList.remove('hidden');
+    } catch (error) {
+        console.error('Error loading users:', error);
+        document.getElementById('users-loading').textContent = '加载失败';
+    }
+}
+
+// 加载关联
+async function loadAssociations() {
+    try {
+        const response = await fetch('/api/resource-quotas');
+        associations = await response.json();
+    } catch (error) {
+        console.error('Error loading associations:', error);
+    }
+}
+
+// 更新统计
+function updateStats() {
+    document.getElementById('stat-accounts').textContent = accounts.length;
+    document.getElementById('stat-users').textContent = users.length;
+    document.getElementById('stat-assocs').textContent = associations.length;
+    
+    const clusters = new Set();
+    associations.forEach(a => clusters.add(a.cluster));
+    document.getElementById('stat-clusters').textContent = clusters.size || 1;
+}
+
+// 渲染账户树
+function renderAccountTree() {
+    const container = document.getElementById('account-tree');
+    container.innerHTML = '';
+    
+    if (accounts.length === 0) {
+        container.innerHTML = '<div class="text-center py-8 text-slate-500"><i class="fas fa-inbox text-4xl mb-3"></i><p>暂无账户数据</p></div>';
+        return;
+    }
+    
+    // 构建树
+    const tree = {};
+    const roots = [];
+    
+    accounts.forEach(acc => {
+        tree[acc.name] = { ...acc, children: [] };
+    });
+    
+    accounts.forEach(acc => {
+        if (acc.parent && tree[acc.parent]) {
+            tree[acc.parent].children.push(tree[acc.name]);
+        } else {
+            roots.push(tree[acc.name]);
+        }
+    });
+    
+    // 渲染根节点
+    const rootNode = tree['root'];
+    if (rootNode) {
+        const rootDiv = document.createElement('div');
+        rootDiv.className = 'flex items-center gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200';
+        rootDiv.innerHTML = `
+            <div class="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center">
+                <i class="fas fa-building text-white"></i>
+            </div>
+            <div class="flex-1">
+                <div class="font-semibold text-slate-800">root</div>
+                <div class="text-sm text-slate-500">根账户 - 所有账户的父级</div>
+            </div>
+        `;
+        container.appendChild(rootDiv);
+        
+        // 渲染子节点
+        rootNode.children.forEach(child => {
+            container.appendChild(renderTreeNode(child, 1));
+        });
+    }
+    
+    // 渲染其他顶级账户
+    roots.filter(node => node.name !== 'root').forEach(node => {
+        container.appendChild(renderTreeNode(node, 0));
+    });
+}
+
+function renderTreeNode(node, level) {
+    const div = document.createElement('div');
+    div.className = 'ml-' + (level * 4);
+    
+    const hasChildren = node.children && node.children.length > 0;
+    
+    div.innerHTML = `
+        <div class="flex items-center gap-3 p-3 bg-white rounded-lg border border-slate-200 mt-2 hover:border-primary-300 transition-colors">
+            <div class="w-8 h-8 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-lg flex items-center justify-center">
+                <i class="fas fa-folder text-white text-sm"></i>
+            </div>
+            <div class="flex-1">
+                <div class="font-medium text-slate-800">${node.name}</div>
+                ${node.description ? `<div class="text-sm text-slate-500">${node.description}</div>` : ''}
+            </div>
+            <button onclick="deleteAccount('${node.name}')" class="p-2 text-slate-400 hover:text-danger-500 transition-colors" title="删除">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    `;
+    
+    const childrenContainer = document.createElement('div');
+    if (hasChildren) {
+        node.children.forEach(child => {
+            childrenContainer.appendChild(renderTreeNode(child, level + 1));
+        });
+    }
+    
+    const wrapper = document.createElement('div');
+    wrapper.appendChild(div);
+    wrapper.appendChild(childrenContainer);
+    return wrapper;
+}
+
+// 渲染用户表格
+function renderUsersTable() {
+    const tbody = document.getElementById('users-table');
+    tbody.innerHTML = '';
+    
+    if (users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-slate-500">暂无用户数据</td></tr>';
+        return;
+    }
+    
+    users.forEach(user => {
+        let badgeClass = 'badge';
+        let badgeText = user.admin_level;
+        if (user.admin_level === 'Admin') {
+            badgeClass += ' badge-danger';
+        } else if (user.admin_level === 'Operator') {
+            badgeClass += ' badge-warning';
+        } else {
+            badgeClass += ' badge-primary';
+            badgeText = '无';
+        }
+        
+        const userAssocs = associations.filter(a => a.user === user.name && a.user !== '(account)');
+        
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td class="px-6 py-4 font-medium">${user.name}</td>
+            <td class="px-6 py-4">${user.default_account}</td>
+            <td class="px-6 py-4"><span class="${badgeClass}">${badgeText}</span></td>
+            <td class="px-6 py-4">${userAssocs.length}</td>
+            <td class="px-6 py-4">
+                <button onclick="viewUserDetail('${user.name}')" class="text-primary-500 hover:text-primary-600">
+                    <i class="fas fa-eye mr-1"></i>详情
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// Tab 切换
+function switchTab(tab, btn) {
+    document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(`tab-${tab}`).classList.add('active');
+}
+
+// 模态框操作
+function openAccountModal() {
+    document.getElementById('account-modal').classList.add('active');
+    document.getElementById('account-form').reset();
+}
+
+function openUserModal() {
+    document.getElementById('user-modal').classList.add('active');
+    document.getElementById('user-form').reset();
+}
+
+function closeModal(id) {
+    document.getElementById(id).classList.remove('active');
+}
+
+// 创建账户
+async function createAccount() {
+    const data = {
+        name: document.getElementById('acc-name').value,
+        description: document.getElementById('acc-desc').value,
+        organization: document.getElementById('acc-org').value,
+        parent: document.getElementById('acc-parent').value,
+        password: document.getElementById('acc-password').value
+    };
+    
+    if (!data.name) {
+        alert('请输入账户名称');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/accounts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('账户创建成功');
+            closeModal('account-modal');
+            loadAllData();
+        } else {
+            alert('创建失败: ' + result.message);
+        }
+    } catch (error) {
+        alert('创建失败');
+    }
+}
+
+// 创建用户
+async function createUser() {
+    const data = {
+        name: document.getElementById('user-name').value,
+        account: document.getElementById('user-account').value,
+        cluster: document.getElementById('user-cluster').value,
+        partition: document.getElementById('user-partition').value,
+        admin_level: document.getElementById('user-admin').value,
+        password: document.getElementById('user-password').value
+    };
+    
+    if (!data.name || !data.account) {
+        alert('请填写用户名和默认账户');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('用户添加成功');
+            closeModal('user-modal');
+            loadAllData();
+        } else {
+            alert('添加失败: ' + result.message);
+        }
+    } catch (error) {
+        alert('添加失败');
+    }
+}
+
+// 删除账户
+async function deleteAccount(name) {
+    if (!confirm(`确定删除账户 "${name}"?`)) return;
+    const password = prompt('请输入管理员密码:');
+    if (!password) return;
+    
+    try {
+        const response = await fetch(`/api/accounts/${name}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('账户删除成功');
+            loadAllData();
+        } else {
+            alert('删除失败: ' + result.message);
+        }
+    } catch (error) {
+        alert('删除失败');
+    }
+}
+
+// 查看用户详情
+function viewUserDetail(username) {
+    alert(`用户详情: ${username}\n\n功能开发中...`);
+}
+
+// 页面加载完成后加载数据
+document.addEventListener('DOMContentLoaded', function() {
+    checkUserStatus();
+    loadAllData();
+});
+
+// 检查用户登录状态
+async function checkUserStatus() {
+    try {
+        const response = await fetch('/api/current-user');
+        const data = await response.json();
+        
+        if (!data.logged_in) {
+            window.location.href = '/login';
+            return;
+        }
+        
+        window.currentUserType = data.user_type;
+        window.currentUsername = data.username;
+        
+        const adminElements = document.querySelectorAll('.admin-only');
+        if (data.user_type !== 'admin') {
+            adminElements.forEach(el => el.style.display = 'none');
+        }
+    } catch (e) {
+        console.error('检查用户状态失败:', e);
+    }
+}
+</script>
+{% endblock %}

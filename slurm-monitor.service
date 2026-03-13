@@ -1,0 +1,15 @@
+[Unit]
+Description=Slurm Web Monitor
+After=network.target slurmctld.service slurmd.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/slurm-web
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/usr/bin/python3 /root/slurm-web/app.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

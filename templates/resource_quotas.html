@@ -1,0 +1,571 @@
+{% extends "base.html" %}
+
+{% block title %}资源配额管理 - Slurm 集群监控系统{% endblock %}
+{% block page_title %}资源配额管理{% endblock %}
+{% block page_subtitle %}管理 QOS、账户和用户的资源限制{% endblock %}
+
+{% block content %}
+<!-- 统计卡片 -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+    <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200 card-hover">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                <i class="fas fa-tachometer-alt text-blue-600 text-xl"></i>
+            </div>
+            <div>
+                <p class="text-sm text-slate-500">配额规则</p>
+                <p class="text-2xl font-bold text-slate-800" id="stat-quotas">-</p>
+            </div>
+        </div>
+    </div>
+    <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200 card-hover">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                <i class="fas fa-user text-green-600 text-xl"></i>
+            </div>
+            <div>
+                <p class="text-sm text-slate-500">受限用户</p>
+                <p class="text-2xl font-bold text-slate-800" id="stat-users">-</p>
+            </div>
+        </div>
+    </div>
+    <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200 card-hover">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                <i class="fas fa-folder text-purple-600 text-xl"></i>
+            </div>
+            <div>
+                <p class="text-sm text-slate-500">受限账户</p>
+                <p class="text-2xl font-bold text-slate-800" id="stat-accounts">-</p>
+            </div>
+        </div>
+    </div>
+    <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200 card-hover">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
+                <i class="fas fa-bolt text-orange-600 text-xl"></i>
+            </div>
+            <div>
+                <p class="text-sm text-slate-500">QOS策略</p>
+                <p class="text-2xl font-bold text-slate-800" id="stat-qos">-</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tab 导航 -->
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-2 mb-6 inline-flex">
+    <button class="tab-btn active" onclick="switchTab('all', this)">
+        <i class="fas fa-list mr-2"></i>全部配额
+    </button>
+    <button class="tab-btn" onclick="switchTab('qos', this)">
+        <i class="fas fa-bolt mr-2"></i>QOS限制
+    </button>
+    <button class="tab-btn" onclick="switchTab('account', this)">
+        <i class="fas fa-folder mr-2"></i>账户限制
+    </button>
+    <button class="tab-btn" onclick="switchTab('user', this)">
+        <i class="fas fa-user mr-2"></i>用户限制
+    </button>
+</div>
+
+<!-- 全部配额 Tab -->
+<div id="tab-all" class="tab-content active">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+        <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-slate-800">
+                <i class="fas fa-list text-primary-500 mr-2"></i>资源配额列表
+            </h3>
+            <button onclick="openQuotaModal()" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors admin-only">
+                <i class="fas fa-plus mr-2"></i>设置配额
+            </button>
+        </div>
+        <div class="overflow-x-auto">
+            <div id="all-loading" class="flex items-center justify-center py-12 text-slate-500">
+                <div class="spinner mr-3"></div>加载中...
+            </div>
+            <div id="all-content" class="hidden">
+                <table class="w-full table-modern text-sm">
+                    <thead>
+                        <tr>
+                            <th class="px-4 py-3 text-left">实体</th>
+                            <th class="px-4 py-3 text-left">集群</th>
+                            <th class="px-4 py-3 text-left">资源配额</th>
+                            <th class="px-4 py-3 text-left">单任务最大</th>
+                            <th class="px-4 py-3 text-left">每用户限制</th>
+                            <th class="px-4 py-3 text-left">最大时间</th>
+                            <th class="px-4 py-3 text-left">公平份额</th>
+                            <th class="px-4 py-3 text-left">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="all-table"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- QOS限制 Tab -->
+<div id="tab-qos" class="tab-content">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+        <div class="p-6 border-b border-slate-200">
+            <h3 class="text-lg font-semibold text-slate-800">
+                <i class="fas fa-bolt text-primary-500 mr-2"></i>QOS 资源限制
+            </h3>
+        </div>
+        <div class="overflow-x-auto">
+            <div id="qos-loading" class="flex items-center justify-center py-12 text-slate-500">
+                <div class="spinner mr-3"></div>加载中...
+            </div>
+            <div id="qos-content" class="hidden">
+                <table class="w-full table-modern text-sm">
+                    <thead>
+                        <tr>
+                            <th class="px-4 py-3 text-left">QOS名称</th>
+                            <th class="px-4 py-3 text-left">资源配额</th>
+                            <th class="px-4 py-3 text-left">单任务最大</th>
+                            <th class="px-4 py-3 text-left">每用户限制</th>
+                            <th class="px-4 py-3 text-left">最大时间</th>
+                            <th class="px-4 py-3 text-left">优先级</th>
+                            <th class="px-4 py-3 text-left">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="qos-table"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 账户限制 Tab -->
+<div id="tab-account" class="tab-content">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+        <div class="p-6 border-b border-slate-200">
+            <h3 class="text-lg font-semibold text-slate-800">
+                <i class="fas fa-folder text-primary-500 mr-2"></i>账户资源限制
+            </h3>
+        </div>
+        <div class="overflow-x-auto">
+            <div id="account-loading" class="flex items-center justify-center py-12 text-slate-500">
+                <div class="spinner mr-3"></div>加载中...
+            </div>
+            <div id="account-content" class="hidden">
+                <table class="w-full table-modern text-sm">
+                    <thead>
+                        <tr>
+                            <th class="px-4 py-3 text-left">账户</th>
+                            <th class="px-4 py-3 text-left">资源配额</th>
+                            <th class="px-4 py-3 text-left">单任务最大</th>
+                            <th class="px-4 py-3 text-left">每用户限制</th>
+                            <th class="px-4 py-3 text-left">最大时间</th>
+                            <th class="px-4 py-3 text-left">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="account-table"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 用户限制 Tab -->
+<div id="tab-user" class="tab-content">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+        <div class="p-6 border-b border-slate-200">
+            <h3 class="text-lg font-semibold text-slate-800">
+                <i class="fas fa-user text-primary-500 mr-2"></i>用户资源限制
+            </h3>
+        </div>
+        <div class="overflow-x-auto">
+            <div id="user-loading" class="flex items-center justify-center py-12 text-slate-500">
+                <div class="spinner mr-3"></div>加载中...
+            </div>
+            <div id="user-content" class="hidden">
+                <table class="w-full table-modern text-sm">
+                    <thead>
+                        <tr>
+                            <th class="px-4 py-3 text-left">用户</th>
+                            <th class="px-4 py-3 text-left">账户</th>
+                            <th class="px-4 py-3 text-left">集群</th>
+                            <th class="px-4 py-3 text-left">资源配额</th>
+                            <th class="px-4 py-3 text-left">单任务最大</th>
+                            <th class="px-4 py-3 text-left">最大时间</th>
+                            <th class="px-4 py-3 text-left">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="user-table"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 设置配额模态框 -->
+<div id="quota-modal" class="modal">
+    <div class="modal-content" style="max-width: 700px;">
+        <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+            <h3 class="text-lg font-semibold"><i class="fas fa-sliders-h text-primary-500 mr-2"></i>设置资源配额</h3>
+            <button onclick="closeQuotaModal()" class="text-slate-400 hover:text-slate-600">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="p-6 max-h-[60vh] overflow-y-auto">
+            <form id="quota-form" class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">实体类型</label>
+                        <select id="q-entity-type" required onchange="onEntityTypeChange()" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                            <option value="">选择类型</option>
+                            <option value="qos">QOS</option>
+                            <option value="account">账户</option>
+                            <option value="user">用户</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">实体名称</label>
+                        <input type="text" id="q-entity-name" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="例如: high, science, username">
+                    </div>
+                </div>
+                <div id="q-account-group" style="display:none;">
+                    <label class="block text-sm font-medium text-slate-700 mb-1">关联账户 (仅用户需要)</label>
+                    <input type="text" id="q-account" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="账户名称">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">集群 (可选)</label>
+                    <input type="text" id="q-cluster" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="默认所有集群">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">资源配额 (GrpTRES)</label>
+                        <input type="text" id="q-grp-tres" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="cpu=100,mem=500G">
+                        <p class="text-xs text-slate-500 mt-1">格式: cpu=100,mem=500G,gpu=10</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">单任务最大资源 (MaxTRES)</label>
+                        <input type="text" id="q-max-tres" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="cpu=24,gpu=4">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">最大运行时间 (MaxWall)</label>
+                        <input type="text" id="q-max-wall" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="24:00:00">
+                        <p class="text-xs text-slate-500 mt-1">HH:MM:SS 格式</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">公平份额 (Fairshare)</label>
+                        <input type="number" id="q-fairshare" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="100">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">最大作业数 (MaxJobs)</label>
+                        <input type="number" id="q-max-jobs" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="10">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">最大提交数 (MaxSubmit)</label>
+                        <input type="number" id="q-max-submit" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="50">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">管理员密码</label>
+                    <input type="password" id="q-password" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="输入管理员密码">
+                </div>
+            </form>
+        </div>
+        <div class="p-6 border-t border-slate-200 flex justify-end gap-3">
+            <button onclick="closeQuotaModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">取消</button>
+            <button onclick="saveQuota()" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors">保存配额</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let allQuotas = [];
+let qosLimits = [];
+
+// 加载数据
+async function loadData() {
+    await Promise.all([
+        loadQuotas(),
+        loadQosLimits()
+    ]);
+}
+
+async function loadQuotas() {
+    try {
+        const response = await fetch('/api/resource-quotas');
+        allQuotas = await response.json();
+        
+        const userQuotas = allQuotas.filter(q => q.user && q.user !== '(account)');
+        const accountQuotas = allQuotas.filter(q => q.user === '(account)');
+        
+        document.getElementById('stat-quotas').textContent = allQuotas.length;
+        document.getElementById('stat-users').textContent = [...new Set(userQuotas.map(q => q.user))].length;
+        document.getElementById('stat-accounts').textContent = [...new Set(accountQuotas.map(q => q.account))].length;
+        
+        renderAllTable();
+        renderAccountTable();
+        renderUserTable();
+    } catch (error) {
+        console.error('Error loading quotas:', error);
+    }
+}
+
+async function loadQosLimits() {
+    try {
+        const response = await fetch('/api/resource-quotas/qos-limits');
+        qosLimits = await response.json();
+        document.getElementById('stat-qos').textContent = qosLimits.length;
+        renderQosTable();
+    } catch (error) {
+        console.error('Error loading QOS limits:', error);
+    }
+}
+
+// 渲染表格
+function renderAllTable() {
+    const tbody = document.getElementById('all-table');
+    tbody.innerHTML = '';
+    
+    if (allQuotas.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">暂无配额数据</td></tr>';
+    } else {
+        allQuotas.forEach(q => {
+            const isAccount = q.user === '(account)';
+            const entityType = isAccount ? 'account' : 'user';
+            const entityName = isAccount ? q.account : q.user;
+            
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="px-4 py-3">
+                    <span class="badge ${isAccount ? 'badge-info' : 'badge-success'}">${entityType.toUpperCase()}</span>
+                    <span class="ml-2 font-medium">${entityName}</span>
+                </td>
+                <td class="px-4 py-3">${q.cluster}</td>
+                <td class="px-4 py-3"><code class="text-xs bg-slate-100 px-2 py-1 rounded">${q.grp_tres}</code></td>
+                <td class="px-4 py-3"><code class="text-xs bg-slate-100 px-2 py-1 rounded">${q.max_tres}</code></td>
+                <td class="px-4 py-3"><code class="text-xs bg-slate-100 px-2 py-1 rounded">${q.max_tres_per_user}</code></td>
+                <td class="px-4 py-3">${q.max_wall}</td>
+                <td class="px-4 py-3">${q.fairshare}</td>
+                <td class="px-4 py-3">
+                    <button onclick="editQuota('${entityType}', '${entityName}')" class="text-primary-500 hover:text-primary-600 mr-2">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+    
+    document.getElementById('all-loading').classList.add('hidden');
+    document.getElementById('all-content').classList.remove('hidden');
+}
+
+function renderQosTable() {
+    const tbody = document.getElementById('qos-table');
+    tbody.innerHTML = '';
+    
+    if (qosLimits.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">暂无QOS数据</td></tr>';
+    } else {
+        qosLimits.forEach(q => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="px-4 py-3">
+                    <span class="badge badge-warning">QOS</span>
+                    <span class="ml-2 font-medium">${q.name}</span>
+                </td>
+                <td class="px-4 py-3"><code class="text-xs bg-slate-100 px-2 py-1 rounded">${q.grp_tres}</code></td>
+                <td class="px-4 py-3"><code class="text-xs bg-slate-100 px-2 py-1 rounded">${q.max_tres}</code></td>
+                <td class="px-4 py-3"><code class="text-xs bg-slate-100 px-2 py-1 rounded">${q.max_tres_per_user}</code></td>
+                <td class="px-4 py-3">${q.max_wall}</td>
+                <td class="px-4 py-3">${q.priority}</td>
+                <td class="px-4 py-3">
+                    <button onclick="editQuota('qos', '${q.name}')" class="text-primary-500 hover:text-primary-600">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+    
+    document.getElementById('qos-loading').classList.add('hidden');
+    document.getElementById('qos-content').classList.remove('hidden');
+}
+
+function renderAccountTable() {
+    const tbody = document.getElementById('account-table');
+    tbody.innerHTML = '';
+    
+    const accounts = allQuotas.filter(q => q.user === '(account)');
+    
+    if (accounts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">暂无账户配额数据</td></tr>';
+    } else {
+        accounts.forEach(q => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="px-4 py-3">
+                    <span class="badge badge-info">ACCOUNT</span>
+                    <span class="ml-2 font-medium">${q.account}</span>
+                </td>
+                <td class="px-4 py-3"><code class="text-xs bg-slate-100 px-2 py-1 rounded">${q.grp_tres}</code></td>
+                <td class="px-4 py-3"><code class="text-xs bg-slate-100 px-2 py-1 rounded">${q.max_tres}</code></td>
+                <td class="px-4 py-3"><code class="text-xs bg-slate-100 px-2 py-1 rounded">${q.max_tres_per_user}</code></td>
+                <td class="px-4 py-3">${q.max_wall}</td>
+                <td class="px-4 py-3">
+                    <button onclick="editQuota('account', '${q.account}')" class="text-primary-500 hover:text-primary-600">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+    
+    document.getElementById('account-loading').classList.add('hidden');
+    document.getElementById('account-content').classList.remove('hidden');
+}
+
+function renderUserTable() {
+    const tbody = document.getElementById('user-table');
+    tbody.innerHTML = '';
+    
+    const users = allQuotas.filter(q => q.user && q.user !== '(account)');
+    
+    if (users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">暂无用户配额数据</td></tr>';
+    } else {
+        users.forEach(q => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="px-4 py-3">
+                    <span class="badge badge-success">USER</span>
+                    <span class="ml-2 font-medium">${q.user}</span>
+                </td>
+                <td class="px-4 py-3">${q.account}</td>
+                <td class="px-4 py-3">${q.cluster}</td>
+                <td class="px-4 py-3"><code class="text-xs bg-slate-100 px-2 py-1 rounded">${q.grp_tres}</code></td>
+                <td class="px-4 py-3"><code class="text-xs bg-slate-100 px-2 py-1 rounded">${q.max_tres}</code></td>
+                <td class="px-4 py-3">${q.max_wall}</td>
+                <td class="px-4 py-3">
+                    <button onclick="editQuota('user', '${q.user}')" class="text-primary-500 hover:text-primary-600">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+    
+    document.getElementById('user-loading').classList.add('hidden');
+    document.getElementById('user-content').classList.remove('hidden');
+}
+
+// Tab 切换
+function switchTab(tab, btn) {
+    document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(`tab-${tab}`).classList.add('active');
+}
+
+// 模态框操作
+function openQuotaModal() {
+    document.getElementById('quota-modal').classList.add('active');
+    document.getElementById('quota-form').reset();
+    document.getElementById('q-account-group').style.display = 'none';
+}
+
+function closeQuotaModal() {
+    document.getElementById('quota-modal').classList.remove('active');
+}
+
+function onEntityTypeChange() {
+    const type = document.getElementById('q-entity-type').value;
+    document.getElementById('q-account-group').style.display = type === 'user' ? 'block' : 'none';
+}
+
+// 保存配额
+async function saveQuota() {
+    const data = {
+        entity_type: document.getElementById('q-entity-type').value,
+        entity_name: document.getElementById('q-entity-name').value,
+        cluster: document.getElementById('q-cluster').value,
+        account: document.getElementById('q-account').value,
+        grp_tres: document.getElementById('q-grp-tres').value,
+        max_tres: document.getElementById('q-max-tres').value,
+        max_wall: document.getElementById('q-max-wall').value,
+        fairshare: document.getElementById('q-fairshare').value,
+        max_jobs: document.getElementById('q-max-jobs').value,
+        max_submit: document.getElementById('q-max-submit').value,
+        password: document.getElementById('q-password').value
+    };
+    
+    if (!data.entity_type || !data.entity_name) {
+        alert('请填写实体类型和名称');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/resource-quotas/set', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('配额设置成功');
+            closeQuotaModal();
+            loadData();
+        } else {
+            alert('设置失败: ' + result.message);
+        }
+    } catch (error) {
+        alert('设置失败');
+    }
+}
+
+// 编辑配额
+function editQuota(type, name) {
+    openQuotaModal();
+    document.getElementById('q-entity-type').value = type;
+    document.getElementById('q-entity-name').value = name;
+    onEntityTypeChange();
+}
+
+// 页面加载完成后加载数据
+document.addEventListener('DOMContentLoaded', function() {
+    checkUserStatus();
+    loadData();
+});
+
+// 检查用户登录状态
+async function checkUserStatus() {
+    try {
+        const response = await fetch('/api/current-user');
+        const data = await response.json();
+        
+        if (!data.logged_in) {
+            window.location.href = '/login';
+            return;
+        }
+        
+        window.currentUserType = data.user_type;
+        window.currentUsername = data.username;
+        
+        // 根据用户类型控制管理功能
+        const adminElements = document.querySelectorAll('.admin-only');
+        if (data.user_type !== 'admin') {
+            adminElements.forEach(el => el.style.display = 'none');
+        }
+    } catch (e) {
+        console.error('检查用户状态失败:', e);
+    }
+}
+</script>
+{% endblock %}

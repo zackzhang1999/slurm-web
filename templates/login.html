@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - Slurm 集群监控系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        .login-bg {
+            background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 50%, #1e1b4b 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        .login-bg::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(59, 130, 246, 0.1) 0%, transparent 50%);
+            animation: float 20s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            50% { transform: translate(2%, 2%) rotate(5deg); }
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border: 1px, 255, solid rgba(255 255, 0.1);
+        }
+        .input-field {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            transition: all 0.3s ease;
+        }
+        .input-field:focus {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+        .input-field::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+        .tab-active {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: #3b82f6;
+            color: #60a5fa;
+        }
+        .btn-login {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            transition: all 0.3s ease;
+        }
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(59, 130, 246, 0.4);
+        }
+        .error-shake {
+            animation: shake 0.5s ease-in-out;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+        .password-strength {
+            height: 4px;
+            transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body class="login-bg min-h-screen flex items-center justify-center p-4">
+    <div class="relative z-10 w-full max-w-md">
+        <!-- Logo 和标题 -->
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-20 h-20 bg-white/10 rounded-2xl mb-4">
+                <i class="fas fa-server text-4xl text-blue-400"></i>
+            </div>
+            <h1 class="text-3xl font-bold text-white mb-2">Slurm 集群监控</h1>
+            <p class="text-white/60">Slurm Cluster Monitoring System</p>
+        </div>
+
+        <!-- 登录卡片 -->
+        <div class="glass-card rounded-2xl p-8">
+            <!-- Tab 切换 -->
+            <div class="flex gap-2 mb-6 p-1 bg-white/5 rounded-xl">
+                <button type="button" onclick="switchTab('admin')" id="tab-admin" class="flex-1 py-3 px-4 rounded-lg text-sm font-medium text-white/70 tab-active transition-all">
+                    <i class="fas fa-shield-alt mr-2"></i>管理员
+                </button>
+                <button type="button" onclick="switchTab('user')" id="tab-user" class="flex-1 py-3 px-4 rounded-lg text-sm font-medium text-white/70 hover:bg-white/5 transition-all">
+                    <i class="fas fa-user mr-2"></i>普通用户
+                </button>
+            </div>
+
+            <!-- 错误提示 -->
+            <div id="error-message" class="hidden mb-4 p-4 bg-red-500/20 border border-red-500/50 rounded-lg">
+                <p class="text-red-400 text-sm"><i class="fas fa-exclamation-circle mr-2"></i><span id="error-text"></span></p>
+            </div>
+
+            <!-- 管理员登录表单 -->
+            <form id="admin-form" onsubmit="return handleAdminLogin(event)">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-white/80 mb-2">管理员密码</label>
+                        <div class="relative">
+                            <input type="password" id="admin-password" class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入管理员密码" required>
+                            <button type="button" onclick="togglePassword('admin-password')" class="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-login w-full py-3 rounded-lg text-white font-semibold">
+                        <i class="fas fa-sign-in-alt mr-2"></i>登录
+                    </button>
+                </div>
+            </form>
+
+            <!-- 普通用户登录表单 -->
+            <form id="user-form" class="hidden" onsubmit="return handleUserLogin(event)">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-white/80 mb-2">用户名</label>
+                        <input type="text" id="username" class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入系统用户名" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-white/80 mb-2">密码</label>
+                        <div class="relative">
+                            <input type="password" id="user-password" class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入密码" required>
+                            <button type="button" onclick="togglePassword('user-password')" class="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 首次登录修改密码 -->
+                    <div id="change-password-section" class="hidden space-y-4 pt-4 border-t border-white/10">
+                        <div>
+                            <label class="block text-sm font-medium text-white/80 mb-2">新密码</label>
+                            <input type="password" id="new-password" class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入新密码">
+                            <div class="password-strength bg-white/10 mt-2 rounded-full">
+                                <div id="strength-bar" class="h-full rounded-full transition-all" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-white/80 mb-2">确认新密码</label>
+                            <input type="password" id="confirm-password" class="input-field w-full px-4 py-3 rounded-lg" placeholder="请再次输入新密码">
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn-login w-full py-3 rounded-lg text-white font-semibold">
+                        <i class="fas fa-sign-in-alt mr-2"></i>登录
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- 底部信息 -->
+        <div class="text-center mt-6 text-white/40 text-sm">
+            <p>© 2026 Slurm Cluster Monitoring System</p>
+        </div>
+    </div>
+
+    <script>
+        let currentTab = 'admin';
+        
+        function switchTab(tab) {
+            currentTab = tab;
+            document.getElementById('tab-admin').classList.toggle('tab-active', tab === 'admin');
+            document.getElementById('tab-user').classList.toggle('tab-active', tab === 'user');
+            document.getElementById('admin-form').classList.toggle('hidden', tab !== 'admin');
+            document.getElementById('user-form').classList.toggle('hidden', tab !== 'user');
+            hideError();
+        }
+        
+        function togglePassword(inputId) {
+            const input = document.getElementById(inputId);
+            input.type = input.type === 'password' ? 'text' : 'password';
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('error-message');
+            document.getElementById('error-text').textContent = message;
+            errorDiv.classList.remove('hidden');
+            errorDiv.classList.add('error-shake');
+            setTimeout(() => errorDiv.classList.remove('error-shake'), 500);
+        }
+        
+        function hideError() {
+            document.getElementById('error-message').classList.add('hidden');
+        }
+        
+        async function handleAdminLogin(event) {
+            event.preventDefault();
+            hideError();
+            
+            const password = document.getElementById('admin-password').value;
+            
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({type: 'admin', password})
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    window.location.href = '/';
+                } else {
+                    showError(data.message || '密码错误');
+                }
+            } catch (e) {
+                showError('登录失败，请稍后重试');
+            }
+            
+            return false;
+        }
+        
+        async function handleUserLogin(event) {
+            event.preventDefault();
+            hideError();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('user-password').value;
+            const newPassword = document.getElementById('new-password').value;
+            const confirmPassword = document.getElementById('confirm-password').value;
+            
+            // 检查是否需要修改密码
+            const isChangePassword = !document.getElementById('change-password-section').classList.contains('hidden');
+            
+            if (isChangePassword) {
+                if (!newPassword || !confirmPassword) {
+                    showError('请填写新密码');
+                    return false;
+                }
+                if (newPassword !== confirmPassword) {
+                    showError('两次输入的密码不一致');
+                    return false;
+                }
+                if (newPassword.length < 6) {
+                    showError('密码长度至少6位');
+                    return false;
+                }
+            }
+            
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        type: 'user',
+                        username,
+                        password,
+                        newPassword: isChangePassword ? newPassword : null
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    window.location.href = '/';
+                } else if (data.message === 'first_login') {
+                    // 首次登录，需要修改密码
+                    document.getElementById('change-password-section').classList.remove('hidden');
+                    showError('首次登录，请修改密码');
+                } else {
+                    showError(data.message || '用户名或密码错误');
+                }
+            } catch (e) {
+                showError('登录失败，请稍后重试');
+            }
+            
+            return false;
+        }
+        
+        // 监听新密码输入，检测是否需要显示修改密码 section
+        document.getElementById('user-password').addEventListener('change', async function() {
+            const username = document.getElementById('username').value;
+            const password = this.value;
+            
+            if (username && password) {
+                try {
+                    const response = await fetch('/api/check-first-login', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({username, password})
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.firstLogin) {
+                        document.getElementById('change-password-section').classList.remove('hidden');
+                    }
+                } catch (e) {}
+            }
+        });
+        
+        // 密码强度检测
+        document.getElementById('new-password').addEventListener('input', function() {
+            const strength = document.getElementById('strength-bar');
+            const len = this.value.length;
+            
+            if (len === 0) {
+                strength.style.width = '0%';
+                strength.style.backgroundColor = 'transparent';
+            } else if (len < 6) {
+                strength.style.width = '30%';
+                strength.style.backgroundColor = '#ef4444';
+            } else if (len < 10) {
+                strength.style.width = '60%';
+                strength.style.backgroundColor = '#f59e0b';
+            } else {
+                strength.style.width = '100%';
+                strength.style.backgroundColor = '#22c55e';
+            }
+        });
+    </script>
+</body>
+</html>

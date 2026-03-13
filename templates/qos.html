@@ -1,0 +1,571 @@
+{% extends "base.html" %}
+
+{% block title %}QOS管理 - Slurm 集群监控系统{% endblock %}
+{% block page_title %}QOS管理{% endblock %}
+{% block page_subtitle %}服务质量(Quality of Service)配置管理{% endblock %}
+
+{% block content %}
+<!-- 统计卡片 -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200 card-hover">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                <i class="fas fa-bolt text-blue-600 text-xl"></i>
+            </div>
+            <div>
+                <p class="text-sm text-slate-500">QOS总数</p>
+                <p class="text-2xl font-bold text-slate-800" id="stat-total">-</p>
+            </div>
+        </div>
+    </div>
+    <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200 card-hover">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                <i class="fas fa-check-circle text-green-600 text-xl"></i>
+            </div>
+            <div>
+                <p class="text-sm text-slate-500">活跃QOS</p>
+                <p class="text-2xl font-bold text-slate-800" id="stat-active">-</p>
+            </div>
+        </div>
+    </div>
+    <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200 card-hover">
+        <div class="flex items-center gap-4">
+            <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                <i class="fas fa-link text-purple-600 text-xl"></i>
+            </div>
+            <div>
+                <p class="text-sm text-slate-500">已使用</p>
+                <p class="text-2xl font-bold text-slate-800" id="stat-used">-</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- QOS列表 -->
+<div class="bg-white rounded-xl shadow-sm border border-slate-200">
+    <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+        <h3 class="text-lg font-semibold text-slate-800">
+            <i class="fas fa-list text-primary-500 mr-2"></i>QOS列表
+        </h3>
+        <button onclick="openCreateModal()" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors admin-only">
+            <i class="fas fa-plus mr-2"></i>创建QOS
+        </button>
+    </div>
+    <div class="overflow-x-auto">
+        <div id="qos-loading" class="flex items-center justify-center py-12 text-slate-500">
+            <div class="spinner mr-3"></div>加载中...
+        </div>
+        <div id="qos-content" class="hidden">
+            <table class="w-full table-modern">
+                <thead>
+                    <tr>
+                        <th class="px-4 py-3 text-left">名称</th>
+                        <th class="px-4 py-3 text-left text-center">优先级</th>
+                        <th class="px-4 py-3 text-left text-center">最大提交<br>作业数/用户</th>
+                        <th class="px-4 py-3 text-left text-center">每用户<br>最大作业数</th>
+                        <th class="px-4 py-3 text-left">最大运行时间</th>
+                        <th class="px-4 py-3 text-left">最大资源限制</th>
+                        <th class="px-4 py-3 text-left">抢占模式</th>
+                        <th class="px-4 py-3 text-left">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="qos-table"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 创建QOS模态框 -->
+<div id="create-modal" class="modal">
+    <div class="modal-content">
+        <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+            <h3 class="text-lg font-semibold"><i class="fas fa-plus-circle text-primary-500 mr-2"></i>创建QOS</h3>
+            <button onclick="closeModal('create-modal')" class="text-slate-400 hover:text-slate-600">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="p-6">
+            <form id="create-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">QOS名称 *</label>
+                    <input type="text" id="qos-name" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="例如: high, normal, low">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">优先级</label>
+                        <input type="number" id="qos-priority" value="0" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">宽限期(秒)</label>
+                        <input type="number" id="qos-grace" value="0" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">描述</label>
+                    <input type="text" id="qos-desc" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="QOS描述">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">管理员密码</label>
+                    <input type="password" id="create-password" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="输入管理员密码">
+                </div>
+            </form>
+        </div>
+        <div class="p-6 border-t border-slate-200 flex justify-end gap-3">
+            <button onclick="closeModal('create-modal')" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">取消</button>
+            <button onclick="createQos()" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors">创建</button>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑QOS模态框 -->
+<div id="edit-modal" class="modal">
+    <div class="modal-content">
+        <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+            <h3 class="text-lg font-semibold"><i class="fas fa-edit text-primary-500 mr-2"></i>编辑QOS</h3>
+            <button onclick="closeModal('edit-modal')" class="text-slate-400 hover:text-slate-600">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="p-6 max-h-[60vh] overflow-y-auto">
+            <form id="edit-form" class="space-y-4">
+                <input type="hidden" id="edit-qos-name">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">优先级</label>
+                        <input type="number" id="edit-priority" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">使用因子</label>
+                        <input type="number" id="edit-usage" step="0.1" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">资源限制 (GrpTRES)</label>
+                    <input type="text" id="edit-grp-tres" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="cpu=100,mem=500G">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">最大资源 (MaxTRES)</label>
+                    <input type="text" id="edit-max-tres" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="cpu=24,gpu=4">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">最大时间 (MaxWall)</label>
+                    <input type="text" id="edit-max-wall" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="24:00:00">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">抢占设置</label>
+                    <input type="text" id="edit-preempt" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="例如: normal,low">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">管理员密码</label>
+                    <input type="password" id="edit-password" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="输入管理员密码">
+                </div>
+            </form>
+        </div>
+        <div class="p-6 border-t border-slate-200 flex justify-end gap-3">
+            <button onclick="closeModal('edit-modal')" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">取消</button>
+            <button onclick="updateQos()" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors">保存</button>
+        </div>
+    </div>
+</div>
+
+<!-- QOS详情模态框 -->
+<div id="detail-modal" class="modal">
+    <div class="modal-content" style="max-width: 800px;">
+        <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+            <h3 class="text-lg font-semibold"><i class="fas fa-info-circle text-primary-500 mr-2"></i>QOS详情</h3>
+            <button onclick="closeModal('detail-modal')" class="text-slate-400 hover:text-slate-600">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="p-6">
+            <div id="qos-detail-content" class="space-y-4"></div>
+            
+            <div class="mt-6">
+                <h4 class="font-semibold text-slate-800 mb-3">关联用户/账户</h4>
+                <div id="qos-associations" class="overflow-x-auto">
+                    <table class="w-full table-modern text-sm">
+                        <thead>
+                            <tr>
+                                <th class="px-4 py-2 text-left">类型</th>
+                                <th class="px-4 py-2 text-left">名称</th>
+                                <th class="px-4 py-2 text-left">账户</th>
+                                <th class="px-4 py-2 text-left">集群</th>
+                            </tr>
+                        </thead>
+                        <tbody id="associations-table"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let qosList = [];
+
+// 加载QOS列表
+async function loadQosList() {
+    try {
+        const response = await fetch('/api/qos');
+        qosList = await response.json();
+        
+        document.getElementById('stat-total').textContent = qosList.length;
+        document.getElementById('stat-active').textContent = qosList.filter(q => q.flags !== 'Deleted').length;
+        
+        renderQosTable();
+        
+        document.getElementById('qos-loading').classList.add('hidden');
+        document.getElementById('qos-content').classList.remove('hidden');
+    } catch (error) {
+        console.error('Error loading QOS list:', error);
+        document.getElementById('qos-loading').textContent = '加载失败';
+    }
+}
+
+// 渲染QOS表格
+function renderQosTable() {
+    const tbody = document.getElementById('qos-table');
+    tbody.innerHTML = '';
+    
+    if (qosList.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-8 text-center text-slate-500">暂无QOS数据</td></tr>';
+        return;
+    }
+    
+    qosList.forEach(qos => {
+        const tr = document.createElement('tr');
+        
+        // 格式化资源限制显示
+        const formatLimit = (value) => {
+            if (!value || value === '') return '<span class="text-slate-400">-</span>';
+            return value;
+        };
+        
+        // 格式化最大提交作业数显示
+        const maxSubmitPerUser = qos.max_submit_jobs_per_user || qos.max_submit_jobs || '';
+        const maxJobsPerUser = qos.max_jobs_per_user || '';
+        const maxWall = formatLimit(qos.max_wall_duration_per_job);
+        const maxTres = formatLimit(qos.max_tres_per_job);
+        
+        tr.innerHTML = `
+            <td class="px-4 py-4 font-medium">
+                <span class="badge badge-warning mr-1">QOS</span>
+                ${qos.name}
+            </td>
+            <td class="px-4 py-4 text-center">${qos.priority}</td>
+            <td class="px-4 py-4 text-center">${formatLimit(maxSubmitPerUser)}</td>
+            <td class="px-4 py-4 text-center">${formatLimit(maxJobsPerUser)}</td>
+            <td class="px-4 py-4">${maxWall}</td>
+            <td class="px-4 py-4 text-xs">${maxTres}</td>
+            <td class="px-4 py-4">${qos.preempt_mode || '-'}</td>
+            <td class="px-4 py-4">
+                <button onclick="openEditModal('${qos.name}')" class="text-primary-500 hover:text-primary-600 mr-2" title="编辑">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button onclick="viewQosDetail('${qos.name}')" class="text-info-500 hover:text-info-600 mr-2" title="详情">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button onclick="deleteQos('${qos.name}')" class="text-danger-500 hover:text-danger-600" title="删除">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// 模态框操作
+function openCreateModal() {
+    document.getElementById('create-modal').classList.add('active');
+    // 清空表单字段
+    document.getElementById('qos-name').value = '';
+    document.getElementById('qos-priority').value = '0';
+    document.getElementById('qos-grace').value = '0';
+    document.getElementById('qos-desc').value = '';
+    document.getElementById('create-password').value = '';
+}
+
+function openEditModal(name) {
+    document.getElementById('edit-modal').classList.add('active');
+    document.getElementById('edit-qos-name').value = name;
+    // 清空表单字段
+    document.getElementById('edit-priority').value = '';
+    document.getElementById('edit-usage').value = '';
+    document.getElementById('edit-grp-tres').value = '';
+    document.getElementById('edit-max-tres').value = '';
+    document.getElementById('edit-max-wall').value = '';
+    document.getElementById('edit-preempt').value = '';
+    document.getElementById('edit-password').value = '';
+}
+
+function closeModal(id) {
+    document.getElementById(id).classList.remove('active');
+}
+
+// 创建QOS
+async function createQos() {
+    const password = document.getElementById('create-password').value;
+    
+    if (!password) {
+        alert('请输入管理员密码');
+        document.getElementById('create-password').focus();
+        return;
+    }
+    
+    const data = {
+        name: document.getElementById('qos-name').value,
+        priority: document.getElementById('qos-priority').value,
+        grace_time: document.getElementById('qos-grace').value,
+        description: document.getElementById('qos-desc').value,
+        password: password
+    };
+    
+    if (!data.name) {
+        alert('请输入QOS名称');
+        document.getElementById('qos-name').focus();
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/qos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('QOS创建成功');
+            closeModal('create-modal');
+            loadQosList();
+        } else {
+            alert('创建失败: ' + result.message);
+        }
+    } catch (error) {
+        alert('创建失败');
+    }
+}
+
+// 更新QOS
+async function updateQos() {
+    const name = document.getElementById('edit-qos-name').value;
+    const password = document.getElementById('edit-password').value;
+    
+    // 前端验证密码
+    if (!password) {
+        alert('请输入管理员密码');
+        document.getElementById('edit-password').focus();
+        return;
+    }
+    
+    // 只收集非空字段
+    const data = { password: password };
+    
+    const priority = document.getElementById('edit-priority').value.trim();
+    const usagefactor = document.getElementById('edit-usage').value.trim();
+    const grptres = document.getElementById('edit-grp-tres').value.trim();
+    const maxtres = document.getElementById('edit-max-tres').value.trim();
+    const maxwall = document.getElementById('edit-max-wall').value.trim();
+    const preempt = document.getElementById('edit-preempt').value.trim();
+    
+    if (priority) data.priority = priority;
+    if (usagefactor) data.usagefactor = usagefactor;
+    if (grptres) data.grptres = grptres;
+    if (maxtres) data.maxtres = maxtres;
+    if (maxwall) data.maxwall = maxwall;
+    if (preempt) data.preempt = preempt;
+    
+    // 检查是否至少有一个字段被修改
+    if (Object.keys(data).length <= 1) {  // 只有password
+        alert('请至少填写一个要修改的字段');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/qos/${name}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('QOS更新成功');
+            closeModal('edit-modal');
+            loadQosList();
+        } else {
+            alert('更新失败: ' + result.message);
+        }
+    } catch (error) {
+        alert('更新失败');
+    }
+}
+
+// 删除QOS
+async function deleteQos(name) {
+    if (!confirm(`确定删除QOS "${name}"?`)) return;
+    const password = prompt('请输入管理员密码:');
+    if (!password) return;
+    
+    try {
+        const response = await fetch(`/api/qos/${name}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('QOS删除成功');
+            loadQosList();
+        } else {
+            alert('删除失败: ' + result.message);
+        }
+    } catch (error) {
+        alert('删除失败');
+    }
+}
+
+// 查看QOS详情
+async function viewQosDetail(name) {
+    try {
+        const response = await fetch(`/api/qos/${name}`);
+        const detail = await response.json();
+        
+        // 从列表中找到对应的QOS数据（包含资源配额）
+        const qosData = qosList.find(q => q.name === name) || {};
+        
+        const formatValue = (val) => val && val !== '' ? val : '<span class="text-slate-400">未限制</span>';
+        
+        const content = document.getElementById('qos-detail-content');
+        content.innerHTML = `
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div class="bg-slate-50 p-4 rounded-lg">
+                    <div class="text-sm text-slate-500">名称</div>
+                    <div class="font-medium">${detail.name || name}</div>
+                </div>
+                <div class="bg-slate-50 p-4 rounded-lg">
+                    <div class="text-sm text-slate-500">优先级</div>
+                    <div class="font-medium">${detail.priority || qosData.priority || '0'}</div>
+                </div>
+            </div>
+            
+            <h4 class="font-semibold text-slate-800 mb-3"><i class="fas fa-tachometer-alt text-primary-500 mr-2"></i>资源配额限制</h4>
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div class="bg-slate-50 p-4 rounded-lg">
+                    <div class="text-sm text-slate-500">每用户最大提交作业数 (MaxSubmitJobsPerUser)</div>
+                    <div class="font-medium">${formatValue(qosData.max_submit_jobs_per_user || qosData.max_submit_jobs)}</div>
+                </div>
+                <div class="bg-slate-50 p-4 rounded-lg">
+                    <div class="text-sm text-slate-500">每用户最大作业数 (MaxJobsPerUser)</div>
+                    <div class="font-medium">${formatValue(qosData.max_jobs_per_user)}</div>
+                </div>
+                <div class="bg-slate-50 p-4 rounded-lg">
+                    <div class="text-sm text-slate-500">最大运行时间 (MaxWallDurationPerJob)</div>
+                    <div class="font-medium">${formatValue(qosData.max_wall_duration_per_job)}</div>
+                </div>
+                <div class="bg-slate-50 p-4 rounded-lg">
+                    <div class="text-sm text-slate-500">每作业最大资源 (MaxTRESPerJob)</div>
+                    <div class="font-medium text-xs break-all">${formatValue(qosData.max_tres_per_job)}</div>
+                </div>
+                <div class="bg-slate-50 p-4 rounded-lg">
+                    <div class="text-sm text-slate-500">每用户最大资源 (MaxTRESPerUser)</div>
+                    <div class="font-medium text-xs break-all">${formatValue(qosData.max_tres_per_user)}</div>
+                </div>
+                <div class="bg-slate-50 p-4 rounded-lg">
+                    <div class="text-sm text-slate-500">最大作业数 (MaxJobs)</div>
+                    <div class="font-medium">${formatValue(qosData.max_jobs)}</div>
+                </div>
+            </div>
+            
+            <h4 class="font-semibold text-slate-800 mb-3"><i class="fas fa-cog text-primary-500 mr-2"></i>其他设置</h4>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="bg-slate-50 p-4 rounded-lg">
+                    <div class="text-sm text-slate-500">抢占模式</div>
+                    <div class="font-medium">${qosData.preempt_mode || '-'}</div>
+                </div>
+                <div class="bg-slate-50 p-4 rounded-lg">
+                    <div class="text-sm text-slate-500">标志</div>
+                    <div class="font-medium">${qosData.flags || '-'}</div>
+                </div>
+                <div class="bg-slate-50 p-4 rounded-lg">
+                    <div class="text-sm text-slate-500">宽限期</div>
+                    <div class="font-medium">${qosData.grace_time || '0'} 秒</div>
+                </div>
+                <div class="bg-slate-50 p-4 rounded-lg">
+                    <div class="text-sm text-slate-500">组资源限制 (GrpTRES)</div>
+                    <div class="font-medium text-xs break-all">${formatValue(detail.grptres)}</div>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('detail-modal').classList.add('active');
+    } catch (error) {
+        console.error('Error loading QOS detail:', error);
+        alert('加载详情失败');
+    }
+}
+
+// 查看关联
+async function viewAssociations(name) {
+    try {
+        const response = await fetch(`/api/qos/${name}/associations`);
+        const associations = await response.json();
+        
+        const tbody = document.getElementById('associations-table');
+        tbody.innerHTML = '';
+        
+        if (associations.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-slate-500">暂无关联</td></tr>';
+        } else {
+            associations.forEach(assoc => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="px-4 py-2">${assoc.user ? '用户' : '账户'}</td>
+                    <td class="px-4 py-2">${assoc.user || assoc.account}</td>
+                    <td class="px-4 py-2">${assoc.account}</td>
+                    <td class="px-4 py-2">${assoc.cluster}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+        
+        document.getElementById('detail-modal').classList.add('active');
+    } catch (error) {
+        console.error('Error loading associations:', error);
+    }
+}
+
+// 页面加载完成后加载数据
+document.addEventListener('DOMContentLoaded', function() {
+    checkUserStatus();
+    loadQosList();
+});
+
+// 检查用户登录状态
+async function checkUserStatus() {
+    try {
+        const response = await fetch('/api/current-user');
+        const data = await response.json();
+        
+        if (!data.logged_in) {
+            window.location.href = '/login';
+            return;
+        }
+        
+        window.currentUserType = data.user_type;
+        window.currentUsername = data.username;
+        
+        const adminElements = document.querySelectorAll('.admin-only');
+        if (data.user_type !== 'admin') {
+            adminElements.forEach(el => el.style.display = 'none');
+        }
+    } catch (e) {
+        console.error('检查用户状态失败:', e);
+    }
+}
+</script>
+{% endblock %}

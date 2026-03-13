@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Amax 集群监控系统{% endblock %}</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            200: '#bfdbfe',
+                            300: '#93c5fd',
+                            400: '#60a5fa',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1e3a8a',
+                        },
+                        dark: {
+                            800: '#1e293b',
+                            900: '#0f172a',
+                        },
+                        success: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                        },
+                        warning: {
+                            50: '#fffbeb',
+                            100: '#fef3c7',
+                            500: '#f59e0b',
+                            600: '#d97706',
+                        },
+                        danger: {
+                            50: '#fef2f2',
+                            100: '#fee2e2',
+                            500: '#ef4444',
+                            600: '#dc2626',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        
+        /* 动画 */
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        
+        /* 玻璃态效果 */
+        .glass {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+        }
+        
+        /* 表格样式 */
+        .table-modern {
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+        .table-modern th {
+            background: #f8fafc;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+        .table-modern td, .table-modern th {
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .table-modern tr:last-child td {
+            border-bottom: none;
+        }
+        .table-modern tbody tr:hover {
+            background: #f8fafc;
+        }
+        
+        /* 侧边栏 */
+        .sidebar-link {
+            position: relative;
+            transition: all 0.2s;
+        }
+        .sidebar-link::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 3px;
+            height: 0;
+            background: #3b82f6;
+            transition: height 0.2s;
+        }
+        .sidebar-link:hover::before,
+        .sidebar-link.active::before {
+            height: 100%;
+        }
+        .sidebar-link.active {
+            background: rgba(59, 130, 246, 0.1);
+            color: #2563eb;
+        }
+        
+        /* 状态徽章 */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .badge-success { background: #dcfce7; color: #166534; }
+        .badge-warning { background: #fef3c7; color: #92400e; }
+        .badge-danger { background: #fee2e2; color: #991b1b; }
+        .badge-info { background: #dbeafe; color: #1e40af; }
+        .badge-primary { background: #eff6ff; color: #1d4ed8; }
+        
+        /* 状态颜色 */
+        .state-idle { color: #22c55e; }
+        .state-alloc { color: #f59e0b; }
+        .state-mix { color: #8b5cf6; }
+        .state-down { color: #ef4444; }
+        .state-R { color: #22c55e; }
+        .state-PD { color: #f59e0b; }
+        .state-S { color: #8b5cf6; }
+        
+        /* 进度条 */
+        .progress-bar {
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+        
+        /* 模态框 */
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.2s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .modal.active {
+            display: flex;
+        }
+        .modal-content {
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            border: 1px solid #e2e8f0;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow: hidden;
+            animation: slideUp 0.3s ease;
+        }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        /* 侧边抽屉 - 作业详情 */
+        .drawer-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.3);
+            z-index: 1100;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .drawer-overlay.active {
+            display: block;
+            opacity: 1;
+        }
+        .drawer {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 560px;
+            max-width: 90vw;
+            height: 100vh;
+            background: white;
+            z-index: 1101;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            box-shadow: -4px 0 24px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+        }
+        .drawer.active {
+            transform: translateX(0);
+        }
+        .drawer-header {
+            padding: 24px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+        }
+        .drawer-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+        }
+        .drawer-close {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+            transition: all 0.2s;
+        }
+        .drawer-close:hover {
+            background: #f1f5f9;
+            color: #334155;
+        }
+        .detail-card {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        .detail-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #64748b;
+            margin-bottom: 4px;
+        }
+        .detail-value {
+            font-size: 1rem;
+            color: #1e293b;
+            font-weight: 500;
+        }
+        .detail-value-mono {
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 0.875rem;
+            background: #f1f5f9;
+            padding: 8px 12px;
+            border-radius: 6px;
+            color: #334155;
+            word-break: break-all;
+        }
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+        .detail-divider {
+            height: 1px;
+            background: #e2e8f0;
+            margin: 20px 0;
+        }
+        
+        /* 加载动画 */
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid #e2e8f0;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Tab */
+        .tab-btn {
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #64748b;
+            transition: all 0.2s;
+        }
+        .tab-btn:hover { color: #334155; }
+        .tab-btn.active {
+            background: #3b82f6;
+            color: white;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* 页面内容区域 */
+        .page-content {
+            min-height: calc(100vh - 4rem);
+        }
+    </style>
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+    
+    <div class="flex h-screen overflow-hidden">
+        <!-- 侧边栏 -->
+        <aside class="w-64 bg-white border-r border-slate-200 flex flex-col">
+            <!-- Logo -->
+            <div class="h-16 flex items-center px-6 border-b border-slate-200">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex items-center justify-center">
+                        <i class="fas fa-server text-white text-lg"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg text-slate-800">AMAX</h1>
+                        <p class="text-xs text-slate-500">集群管理系统</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 导航 -->
+            <nav class="flex-1 overflow-y-auto py-4">
+                <ul class="space-y-1 px-3">
+                    <li>
+                        <a href="#" data-page="dashboard" onclick="switchPage('dashboard'); return false;" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 {% if request.endpoint == 'index' %}active{% endif %}">
+                            <i class="fas fa-chart-line w-5"></i>
+                            仪表盘
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-page="nodes" onclick="switchPage('nodes'); return false;" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+                            <i class="fas fa-desktop w-5"></i>
+                            节点监控
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-page="jobs" onclick="switchPage('jobs'); return false;" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+                            <i class="fas fa-tasks w-5"></i>
+                            作业管理
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-page="gpu" onclick="switchPage('gpu'); return false;" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+                            <i class="fas fa-microchip w-5"></i>
+                            GPU监控
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-page="users" onclick="switchPage('users'); return false;" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+                            <i class="fas fa-users w-5"></i>
+                            用户统计
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-page="partitions" onclick="switchPage('partitions'); return false;" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+                            <i class="fas fa-layer-group w-5"></i>
+                            分区信息
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-page="statistics" onclick="switchPage('statistics'); return false;" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+                            <i class="fas fa-chart-bar w-5"></i>
+                            统计报表
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/disk-quota" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+                            <i class="fas fa-hdd w-5"></i>
+                            磁盘配额
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/resource-quotas" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 {% if request.endpoint == 'resource_quotas_page' %}active{% endif %}">
+                            <i class="fas fa-tachometer-alt w-5"></i>
+                            资源配额
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/qos" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 {% if request.endpoint == 'qos_page' %}active{% endif %}">
+                            <i class="fas fa-bolt w-5"></i>
+                            QOS管理
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/accounts" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 {% if request.endpoint == 'accounts_page' %}active{% endif %}">
+                            <i class="fas fa-user-cog w-5"></i>
+                            账户管理
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+            
+            <!-- 底部 -->
+            <div class="p-4 border-t border-slate-200">
+                <!-- 用户信息 -->
+                <div class="flex items-center gap-3 px-4 py-3 bg-slate-50 rounded-lg mb-3">
+                    <div class="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-user text-primary-600 text-sm" id="user-icon"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-slate-900" id="current-username">--</p>
+                        <p class="text-xs text-slate-500" id="current-user-type">加载中...</p>
+                    </div>
+                    <button onclick="logout()" class="text-slate-400 hover:text-red-500 transition-colors" title="退出登录">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+                
+                <!-- 系统状态 -->
+                <div class="flex items-center gap-3 px-4 py-3 bg-slate-50 rounded-lg">
+                    <div class="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
+                        <i class="fas fa-circle text-success-500 text-xs" id="conn-status-icon"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-slate-900">系统状态</p>
+                        <p class="text-xs text-slate-500 truncate" id="conn-status-text">连接中...</p>
+                    </div>
+                </div>
+                <div class="mt-3 text-xs text-slate-400 text-center">
+                    更新: <span id="last-update-time">--:--:--</span>
+                </div>
+            </div>
+        </aside>
+        
+        <!-- 主内容区 -->
+        <main class="flex-1 overflow-y-auto">
+            <!-- 顶部栏 -->
+            <header class="glass sticky top-0 z-30 border-b border-slate-200">
+                <div class="flex items-center justify-between px-8 h-16">
+                    <div>
+                        <h2 class="text-xl font-semibold text-slate-800">{% block page_title %}仪表盘{% endblock %}</h2>
+                        <p class="text-sm text-slate-500">{% block page_subtitle %}集群概览与实时监控{% endblock %}</p>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <span class="text-sm text-slate-500" id="current-time"></span>
+                        <button onclick="refreshData()" class="p-2 text-slate-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="刷新数据">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            </header>
+            
+            <!-- 页面内容 -->
+            <div class="p-8 page-content">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="mb-4 p-4 rounded-lg {% if category == 'error' %}bg-red-50 text-red-700 border border-red-200{% else %}bg-green-50 text-green-700 border border-green-200{% endif %}">
+                                <div class="flex items-center gap-2">
+                                    <i class="fas {% if category == 'error' %}fa-exclamation-circle{% else %}fa-check-circle{% endif %}"></i>
+                                    <span>{{ message }}</span>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+                
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+    
+    <!-- 加载遮罩 -->
+    <div id="loading-overlay" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-xl p-6 flex items-center gap-4">
+            <div class="animate-spin w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full"></div>
+            <span class="text-slate-700">加载中...</span>
+        </div>
+    </div>
+    
+    <!-- 密码验证模态框 -->
+    <div id="password-modal" class="modal">
+        <div class="modal-content">
+            <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+                <h3 class="text-lg font-semibold"><i class="fas fa-lock text-primary-500 mr-2"></i>管理员验证</h3>
+                <button onclick="closePasswordModal()" class="text-slate-400 hover:text-slate-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-6">
+                <p class="text-slate-600 mb-4">请输入管理员密码以继续操作</p>
+                <input type="password" id="admin-password" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="输入密码">
+                <div class="flex justify-end gap-3 mt-6">
+                    <button onclick="closePasswordModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">取消</button>
+                    <button onclick="confirmPassword()" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors">确认</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 作业详情抽屉 -->
+    <div id="job-detail-overlay" class="drawer-overlay" onclick="closeJobDetail()"></div>
+    <div id="job-detail-drawer" class="drawer">
+        <div class="drawer-header">
+            <div>
+                <div class="flex items-center gap-3 mb-2">
+                    <span id="job-detail-id" class="text-2xl font-bold text-slate-800">#--</span>
+                    <span id="job-detail-status">--</span>
+                </div>
+                <p id="job-detail-name" class="text-slate-500">--</p>
+            </div>
+            <button onclick="closeJobDetail()" class="drawer-close">
+                <i class="fas fa-times text-lg"></i>
+            </button>
+        </div>
+        <div class="drawer-body">
+            <!-- 基本信息 -->
+            <div class="detail-card">
+                <h4 class="font-semibold text-slate-800 mb-4 flex items-center">
+                    <i class="fas fa-info-circle text-primary-500 mr-2"></i>基本信息
+                </h4>
+                <div class="detail-grid">
+                    <div>
+                        <p class="detail-label">用户</p>
+                        <p id="job-detail-user" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">分区</p>
+                        <p id="job-detail-partition" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">优先级</p>
+                        <p id="job-detail-priority" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">作业名</p>
+                        <p id="job-detail-jobname" class="detail-value">--</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 资源信息 -->
+            <div class="detail-card">
+                <h4 class="font-semibold text-slate-800 mb-4 flex items-center">
+                    <i class="fas fa-microchip text-success-500 mr-2"></i>资源分配
+                </h4>
+                <div class="detail-grid">
+                    <div>
+                        <p class="detail-label">节点数</p>
+                        <p id="job-detail-nodes" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">CPU 核心</p>
+                        <p id="job-detail-cpus" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">内存</p>
+                        <p id="job-detail-memory" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">GPU</p>
+                        <p id="job-detail-gpu" class="detail-value">--</p>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <p class="detail-label">分配节点</p>
+                    <p id="job-detail-nodelist" class="detail-value-mono mt-1">--</p>
+                </div>
+            </div>
+            
+            <!-- 时间信息 -->
+            <div class="detail-card">
+                <h4 class="font-semibold text-slate-800 mb-4 flex items-center">
+                    <i class="fas fa-clock text-warning-500 mr-2"></i>时间信息
+                </h4>
+                <div class="detail-grid">
+                    <div>
+                        <p class="detail-label">提交时间</p>
+                        <p id="job-detail-submit" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">开始时间</p>
+                        <p id="job-detail-start" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">运行时间</p>
+                        <p id="job-detail-time" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">剩余时间</p>
+                        <p id="job-detail-timeleft" class="detail-value">--</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 路径信息 -->
+            <div class="detail-card">
+                <h4 class="font-semibold text-slate-800 mb-4 flex items-center">
+                    <i class="fas fa-folder text-purple-500 mr-2"></i>工作目录
+                </h4>
+                <p id="job-detail-workdir" class="detail-value-mono">--</p>
+            </div>
+            
+            <!-- 命令信息（如果有） -->
+            <div class="detail-card" id="job-detail-command-section" style="display: none;">
+                <h4 class="font-semibold text-slate-800 mb-4 flex items-center">
+                    <i class="fas fa-terminal text-slate-500 mr-2"></i>执行命令
+                </h4>
+                <p id="job-detail-command" class="detail-value-mono">--</p>
+            </div>
+            
+            <!-- 操作按钮 -->
+            <div class="flex gap-3 mt-6">
+                <button id="job-detail-cancel-btn" onclick="cancelJobFromDetail()" class="flex-1 px-4 py-3 bg-danger-500 hover:bg-danger-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2">
+                    <i class="fas fa-times"></i>取消作业
+                </button>
+                <button onclick="viewJobOutput()" class="flex-1 px-4 py-3 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2">
+                    <i class="fas fa-file-alt"></i>查看输出
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 节点详情抽屉 -->
+    <div id="node-detail-overlay" class="drawer-overlay" onclick="closeNodeDetail()"></div>
+    <div id="node-detail-drawer" class="drawer">
+        <div class="drawer-header">
+            <div>
+                <div class="flex items-center gap-3 mb-2">
+                    <i class="fas fa-server text-primary-500 text-2xl"></i>
+                    <span id="node-detail-name" class="text-2xl font-bold text-slate-800">--</span>
+                    <span id="node-detail-status">--</span>
+                </div>
+                <p id="node-detail-partition" class="text-slate-500">--</p>
+            </div>
+            <button onclick="closeNodeDetail()" class="drawer-close">
+                <i class="fas fa-times text-lg"></i>
+            </button>
+        </div>
+        <div class="drawer-body">
+            <!-- 基本信息 -->
+            <div class="detail-card">
+                <h4 class="font-semibold text-slate-800 mb-4 flex items-center">
+                    <i class="fas fa-info-circle text-primary-500 mr-2"></i>基本信息
+                </h4>
+                <div class="detail-grid">
+                    <div>
+                        <p class="detail-label">节点名</p>
+                        <p id="node-detail-hostname" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">状态</p>
+                        <p id="node-detail-state" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">分区</p>
+                        <p id="node-detail-partition-name" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">架构</p>
+                        <p id="node-detail-arch" class="detail-value">--</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 资源信息 -->
+            <div class="detail-card">
+                <h4 class="font-semibold text-slate-800 mb-4 flex items-center">
+                    <i class="fas fa-microchip text-success-500 mr-2"></i>资源配置
+                </h4>
+                <div class="detail-grid">
+                    <div>
+                        <p class="detail-label">CPU 核心</p>
+                        <p id="node-detail-cpus" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">CPU 负载</p>
+                        <p id="node-detail-cpuload" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">总内存</p>
+                        <p id="node-detail-memory" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">空闲内存</p>
+                        <p id="node-detail-freemem" class="detail-value">--</p>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <p class="detail-label">CPU 配置详情</p>
+                    <p id="node-detail-cpualloc" class="detail-value-mono mt-1">--</p>
+                </div>
+                <div class="mt-4" id="node-detail-gpu-section" style="display: none;">
+                    <p class="detail-label">GPU 资源</p>
+                    <p id="node-detail-gpu" class="detail-value-mono mt-1">--</p>
+                </div>
+            </div>
+            
+            <!-- 特征与权重 -->
+            <div class="detail-card">
+                <h4 class="font-semibold text-slate-800 mb-4 flex items-center">
+                    <i class="fas fa-sliders-h text-purple-500 mr-2"></i>Slurm 配置
+                </h4>
+                <div class="detail-grid">
+                    <div>
+                        <p class="detail-label">权重</p>
+                        <p id="node-detail-weight" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">版本</p>
+                        <p id="node-detail-version" class="detail-value">--</p>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <p class="detail-label">特征 (Features)</p>
+                    <p id="node-detail-features" class="detail-value-mono mt-1">--</p>
+                </div>
+            </div>
+            
+            <!-- 操作按钮 -->
+            <div class="flex gap-3 mt-6 admin-only">
+                <button id="node-detail-drain-btn" onclick="drainNodeFromDetail()" class="flex-1 px-4 py-3 bg-warning-500 hover:bg-warning-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2">
+                    <i class="fas fa-pause-circle"></i>Drain 节点
+                </button>
+                <button id="node-detail-resume-btn" onclick="resumeNodeFromDetail()" class="flex-1 px-4 py-3 bg-success-500 hover:bg-success-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2">
+                    <i class="fas fa-play-circle"></i>恢复节点
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Socket.IO 连接
+        let socket = null;
+        let passwordCallback = null;
+        window.currentPage = 'dashboard';
+        
+        // 检查是否在主页面（有page-section的页面）
+        function isMainPage() {
+            return document.querySelector('.page-section') !== null;
+        }
+        
+        // 页面切换功能
+        window.switchPage = function(page) {
+            // 如果在独立页面，跳转回主页
+            if (!isMainPage()) {
+                window.location.href = '/?page=' + page;
+                return;
+            }
+            
+            window.currentPage = page;
+            
+            // 更新侧边栏激活状态
+            document.querySelectorAll('.sidebar-link').forEach(link => {
+                link.classList.remove('active');
+                if (link.dataset.page === page) {
+                    link.classList.add('active');
+                }
+            });
+            
+            // 更新页面标题
+            const pageTitles = {
+                'dashboard': ['仪表盘', '集群概览与实时监控'],
+                'nodes': ['节点监控', '集群节点状态详情'],
+                'jobs': ['作业管理', '查看和管理作业队列'],
+                'gpu': ['GPU监控', 'GPU 使用情况和状态'],
+                'users': ['用户统计', '用户资源使用统计'],
+                'partitions': ['分区信息', 'Slurm 分区配置'],
+                'statistics': ['统计报表', '历史数据分析']
+            };
+            
+            const [title, subtitle] = pageTitles[page] || ['仪表盘', ''];
+            document.querySelector('header h2').textContent = title;
+            document.querySelector('header p').textContent = subtitle;
+            
+            // 显示对应的页面内容
+            document.querySelectorAll('.page-section').forEach(section => {
+                section.classList.add('hidden');
+            });
+            const targetSection = document.getElementById('page-' + page);
+            if (targetSection) {
+                targetSection.classList.remove('hidden');
+            }
+            
+            // 加载页面特定数据
+            if (page === 'statistics' && window.loadStatistics) {
+                window.loadStatistics();
+            } else if (page === 'nodes' && window.loadNodesData) {
+                window.loadNodesData();
+            } else if (page === 'jobs' && window.loadJobsData) {
+                window.loadJobsData();
+            } else if (page === 'gpu' && window.loadGPUData) {
+                window.loadGPUData();
+            } else if (page === 'users' && window.loadUsersData) {
+                window.loadUsersData();
+            } else if (page === 'partitions' && window.loadPartitionsData) {
+                window.loadPartitionsData();
+            }
+            
+            // 更新 URL（不刷新页面）
+            history.pushState({page: page}, '', '/?page=' + page);
+        }
+        
+        // 处理浏览器前进/后退
+        window.addEventListener('popstate', function(e) {
+            if (e.state && e.state.page) {
+                switchPage(e.state.page);
+            }
+        });
+        
+        // 初始化页面
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const pageParam = urlParams.get('page');
+            if (pageParam && pageParam !== 'dashboard') {
+                switchPage(pageParam);
+            }
+        });
+        
+        // 更新时间
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('current-time').textContent = now.toLocaleString('zh-CN');
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+        
+        // 显示/隐藏加载
+        function showLoading() {
+            document.getElementById('loading-overlay').classList.remove('hidden');
+        }
+        
+        function hideLoading() {
+            document.getElementById('loading-overlay').classList.add('hidden');
+        }
+        
+        // 刷新数据
+        function refreshData() {
+            if (socket) {
+                socket.emit('request_update');
+            } else {
+                location.reload();
+            }
+        }
+        
+        // 密码验证
+        function showPasswordModal(callback) {
+            passwordCallback = callback;
+            document.getElementById('password-modal').classList.add('active');
+            document.getElementById('admin-password').value = '';
+            document.getElementById('admin-password').focus();
+        }
+        
+        function closePasswordModal() {
+            document.getElementById('password-modal').classList.remove('active');
+            passwordCallback = null;
+        }
+        
+        // 作业详情抽屉
+        let currentDetailJobId = null;
+        
+        function showJobDetail(jobId) {
+            currentDetailJobId = jobId;
+            const overlay = document.getElementById('job-detail-overlay');
+            const drawer = document.getElementById('job-detail-drawer');
+            
+            overlay.classList.add('active');
+            drawer.classList.add('active');
+            
+            // 加载作业详情
+            loadJobDetailData(jobId);
+        }
+        
+        function closeJobDetail() {
+            const overlay = document.getElementById('job-detail-overlay');
+            const drawer = document.getElementById('job-detail-drawer');
+            
+            overlay.classList.remove('active');
+            drawer.classList.remove('active');
+            currentDetailJobId = null;
+        }
+        
+        async function loadJobDetailData(jobId) {
+            // 显示加载状态
+            document.getElementById('job-detail-id').textContent = '#' + jobId;
+            document.getElementById('job-detail-name').textContent = '加载中...';
+            
+            console.log('Loading job detail for:', jobId);
+            console.log('window.allData:', window.allData);
+            
+            try {
+                // 从当前数据中查找作业（使用 == 允许类型转换）
+                let job = null;
+                if (window.allData && window.allData.jobs && window.allData.jobs.length > 0) {
+                    job = window.allData.jobs.find(j => j.job_id == jobId);
+                    console.log('Found job in local data:', job);
+                }
+                
+                // 如果本地没有，从API获取
+                if (!job) {
+                    console.log('Fetching job from API:', jobId);
+                    const response = await fetch(`/api/job/${jobId}`);
+                    const detail = await response.json();
+                    console.log('API response:', detail);
+                    if (detail && Object.keys(detail).length > 0) {
+                        job = detail;
+                    }
+                }
+                
+                if (job) {
+                    renderJobDetail(job);
+                } else {
+                    document.getElementById('job-detail-name').textContent = '作业信息不可用';
+                    console.error('Job not found:', jobId);
+                }
+            } catch (e) {
+                console.error('Failed to load job detail:', e);
+                document.getElementById('job-detail-name').textContent = '加载失败: ' + e.message;
+            }
+        }
+        
+        function renderJobDetail(job) {
+            console.log('Rendering job detail:', job);
+            
+            // 适配两种数据格式：squeue格式 和 scontrol格式
+            // squeue格式: job_id, user, name, state, nodes, cpus, memory, gres, etc.
+            // scontrol格式: jobid, userid, jobname, jobstate, numnodes, numcpus, etc.
+            
+            // 基本信息
+            const jobId = job.job_id || job.jobid || '';
+            const user = job.user || job.userid || '';
+            const name = job.name || job.jobname || '';
+            const partition = job.partition || '';
+            const priority = job.priority || '';
+            const state = job.state || job.jobstate || '';
+            
+            document.getElementById('job-detail-id').textContent = '#' + jobId;
+            document.getElementById('job-detail-name').textContent = name || 'N/A';
+            document.getElementById('job-detail-user').textContent = user || 'N/A';
+            document.getElementById('job-detail-partition').textContent = partition || 'N/A';
+            document.getElementById('job-detail-priority').textContent = priority || 'N/A';
+            document.getElementById('job-detail-jobname').textContent = name || 'N/A';
+            
+            // 状态徽章
+            const statusEl = document.getElementById('job-detail-status');
+            statusEl.innerHTML = getStateBadge(state);
+            
+            // 资源信息
+            const nodes = job.nodes || job.numnodes || job.allocnodes || '';
+            const cpus = job.cpus || job.numcpus || job.reqcpus || '';
+            const memory = job.memory || job.reqmem || '';
+            const gres = job.gres || job.reqgres || '';
+            const nodelist = job.nodelist || job.allocated_nodes || job.allocnodes || job.nodelistex || '';
+            
+            document.getElementById('job-detail-nodes').textContent = nodes || 'N/A';
+            document.getElementById('job-detail-cpus').textContent = cpus || 'N/A';
+            document.getElementById('job-detail-memory').textContent = memory || 'N/A';
+            document.getElementById('job-detail-gpu').textContent = (gres && gres !== 'none') ? gres : '无';
+            document.getElementById('job-detail-nodelist').textContent = nodelist || 'N/A';
+            
+            // 时间信息
+            const submitTime = job.submit_time || job.submittime || '';
+            const startTime = job.start_time || job.starttime || '';
+            const runTime = job.time || job.runtime || job.timelimit || '';
+            const timeLeft = job.time_left || job.timeleft || '';
+            
+            document.getElementById('job-detail-submit').textContent = submitTime || 'N/A';
+            document.getElementById('job-detail-start').textContent = startTime || '未开始';
+            document.getElementById('job-detail-time').textContent = runTime || 'N/A';
+            document.getElementById('job-detail-timeleft').textContent = timeLeft || 'N/A';
+            
+            // 工作目录
+            const workDir = job.work_dir || job.workdir || '';
+            document.getElementById('job-detail-workdir').textContent = workDir || 'N/A';
+            
+            // 取消按钮显示/隐藏
+            const cancelBtn = document.getElementById('job-detail-cancel-btn');
+            if (state === 'R' || state === 'PD' || state === 'RUNNING' || state === 'PENDING') {
+                cancelBtn.style.display = 'flex';
+            } else {
+                cancelBtn.style.display = 'none';
+            }
+        }
+        
+        function cancelJobFromDetail() {
+            if (currentDetailJobId) {
+                const jobId = currentDetailJobId;
+                closeJobDetail();
+                cancelJob(jobId);
+            }
+        }
+        
+        // viewJobOutput 函数在 index.html 中定义
+        // 这里提供一个默认实现，如果 index.html 没有覆盖的话
+        if (typeof viewJobOutput !== 'function') {
+            window.viewJobOutput = function() {
+                if (currentDetailJobId) {
+                    alert('查看作业输出功能\n作业ID: ' + currentDetailJobId + '\n\n请使用 SSH 查看: \ncat slurm-' + currentDetailJobId + '.out');
+                }
+            };
+        }
+        
+        // ESC 键关闭抽屉
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeJobDetail();
+                closeNodeDetail();
+            }
+        });
+        
+        // ============== 节点详情抽屉功能 ==============
+        let currentDetailNodeName = null;
+        
+        function showNodeDetail(nodeName) {
+            currentDetailNodeName = nodeName;
+            const overlay = document.getElementById('node-detail-overlay');
+            const drawer = document.getElementById('node-detail-drawer');
+            
+            overlay.classList.add('active');
+            drawer.classList.add('active');
+            
+            // 加载节点详情
+            loadNodeDetailData(nodeName);
+        }
+        
+        function closeNodeDetail() {
+            const overlay = document.getElementById('node-detail-overlay');
+            const drawer = document.getElementById('node-detail-drawer');
+            
+            overlay.classList.remove('active');
+            drawer.classList.remove('active');
+            currentDetailNodeName = null;
+        }
+        
+        async function loadNodeDetailData(nodeName) {
+            // 显示加载状态
+            document.getElementById('node-detail-name').textContent = nodeName;
+            document.getElementById('node-detail-partition').textContent = '加载中...';
+            
+            console.log('Loading node detail for:', nodeName);
+            
+            try {
+                // 从当前数据中查找节点
+                let node = null;
+                if (window.allData && window.allData.nodes) {
+                    node = window.allData.nodes.find(n => n.name === nodeName);
+                    console.log('Found node in local data:', node);
+                }
+                
+                // 获取详细数据
+                const response = await fetch(`/api/node/${nodeName}`);
+                const detail = await response.json();
+                console.log('API response:', detail);
+                
+                if (detail && Object.keys(detail).length > 0) {
+                    // 合并本地数据和详细数据
+                    renderNodeDetail({...node, ...detail});
+                } else if (node) {
+                    renderNodeDetail(node);
+                } else {
+                    document.getElementById('node-detail-partition').textContent = '节点信息不可用';
+                }
+            } catch (e) {
+                console.error('Failed to load node detail:', e);
+                document.getElementById('node-detail-partition').textContent = '加载失败: ' + e.message;
+            }
+        }
+        
+        function renderNodeDetail(node) {
+            console.log('Rendering node detail:', node);
+            
+            // 适配 sinfo 和 scontrol 两种数据格式
+            const nodeName = node.name || node.nodename || '';
+            const state = node.state || node.stateflags || '';
+            const partition = node.partition || '';
+            const arch = node.arch || '';
+            const cpus = node.cpus || node.cputot || '';
+            const cpuLoad = node.load || node.cpuload || '';
+            const memory = node.memory || node.realmemory || '';
+            const freeMem = node.free_mem || node.freemem || '';
+            const cpuAlloc = node.cpu_alloc || node.cpualloc || '';
+            const gres = node.gres || '';
+            const weight = node.weight || '';
+            const version = node.version || '';
+            const features = node.features || '';
+            
+            // 基本信息
+            document.getElementById('node-detail-name').textContent = nodeName || 'N/A';
+            document.getElementById('node-detail-hostname').textContent = nodeName || 'N/A';
+            document.getElementById('node-detail-state').textContent = state || 'N/A';
+            document.getElementById('node-detail-partition-name').textContent = partition || 'N/A';
+            document.getElementById('node-detail-arch').textContent = arch || 'N/A';
+            
+            // 状态徽章
+            const statusEl = document.getElementById('node-detail-status');
+            statusEl.innerHTML = getStateBadge(state);
+            
+            // 资源信息
+            document.getElementById('node-detail-cpus').textContent = cpus || 'N/A';
+            document.getElementById('node-detail-cpuload').textContent = cpuLoad ? parseFloat(cpuLoad).toFixed(2) : 'N/A';
+            document.getElementById('node-detail-memory').textContent = memory ? (parseInt(memory) / 1024).toFixed(1) + ' GB' : 'N/A';
+            document.getElementById('node-detail-freemem').textContent = freeMem ? (parseInt(freeMem) / 1024).toFixed(1) + ' GB' : 'N/A';
+            document.getElementById('node-detail-cpualloc').textContent = cpuAlloc || 'N/A';
+            
+            // GPU 信息
+            const gpuSection = document.getElementById('node-detail-gpu-section');
+            if (gres && gres !== 'none') {
+                gpuSection.style.display = 'block';
+                document.getElementById('node-detail-gpu').textContent = gres;
+            } else {
+                gpuSection.style.display = 'none';
+            }
+            
+            // Slurm 配置
+            document.getElementById('node-detail-weight').textContent = weight || 'N/A';
+            document.getElementById('node-detail-version').textContent = version || 'N/A';
+            document.getElementById('node-detail-features').textContent = features || '无';
+            
+            // 根据状态显示/隐藏操作按钮
+            const drainBtn = document.getElementById('node-detail-drain-btn');
+            const resumeBtn = document.getElementById('node-detail-resume-btn');
+            
+            if (state.toLowerCase().includes('drain')) {
+                drainBtn.style.display = 'none';
+                resumeBtn.style.display = 'flex';
+            } else {
+                drainBtn.style.display = 'flex';
+                resumeBtn.style.display = 'none';
+            }
+        }
+        
+        // 节点管理操作
+        function drainNode(nodeName) {
+            console.log('[DEBUG] drainNode called with:', nodeName, 'length:', nodeName.length);
+            if (!confirm(`确定将节点 ${nodeName} 设置为 DRAIN 状态?\n该节点将不再接受新作业。`)) return;
+            showPasswordModal(function(password) {
+                const url = `/api/node/${encodeURIComponent(nodeName)}/drain`;
+                console.log('[DEBUG] Fetch URL:', url);
+                fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                }).then(r => r.json()).then(result => {
+                    if (result.success) { 
+                        alert('节点已设置为 DRAIN 状态');
+                        if (typeof refreshData === 'function') refreshData();
+                    }
+                    else alert('操作失败: ' + result.message);
+                }).catch(e => {
+                    alert('操作失败: ' + e.message);
+                });
+            });
+        }
+        
+        function resumeNode(nodeName) {
+            console.log('[DEBUG] resumeNode called with:', nodeName, 'length:', nodeName.length);
+            if (!confirm(`确定恢复节点 ${nodeName}?`)) return;
+            showPasswordModal(function(password) {
+                const url = `/api/node/${encodeURIComponent(nodeName)}/resume`;
+                console.log('[DEBUG] Fetch URL:', url);
+                fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                }).then(r => r.json()).then(result => {
+                    if (result.success) { 
+                        alert('节点已恢复');
+                        if (typeof refreshData === 'function') refreshData();
+                    }
+                    else alert('操作失败: ' + result.message);
+                }).catch(e => {
+                    alert('操作失败: ' + e.message);
+                });
+            });
+        }
+        
+        function drainNodeFromDetail() {
+            if (currentDetailNodeName) {
+                const nodeName = currentDetailNodeName;
+                closeNodeDetail();
+                drainNode(nodeName);
+            }
+        }
+        
+        function resumeNodeFromDetail() {
+            if (currentDetailNodeName) {
+                const nodeName = currentDetailNodeName;
+                closeNodeDetail();
+                resumeNode(nodeName);
+            }
+        }
+        
+        function confirmPassword() {
+            const password = document.getElementById('admin-password').value;
+            if (passwordCallback) {
+                passwordCallback(password);
+            }
+            closePasswordModal();
+        }
+        
+        // 初始化 Socket.IO
+        function initSocketIO() {
+            socket = io();
+            
+            socket.on('connect', function() {
+                document.getElementById('conn-status-icon').className = 'fas fa-circle text-success-500 text-xs';
+                document.getElementById('conn-status-text').textContent = '已连接';
+            });
+            
+            socket.on('disconnect', function() {
+                document.getElementById('conn-status-icon').className = 'fas fa-circle text-danger-500 text-xs';
+                document.getElementById('conn-status-text').textContent = '已断开';
+            });
+            
+            socket.on('data_update', function(data) {
+                document.getElementById('last-update-time').textContent = new Date().toLocaleTimeString('zh-CN');
+                if (window.onDataUpdate) {
+                    window.onDataUpdate(data);
+                }
+            });
+        }
+        
+        // 格式化时间
+        function formatDuration(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+        
+        // 格式化数字
+        function formatNumber(num, decimals = 0) {
+            return new Intl.NumberFormat('zh-CN', {
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals
+            }).format(num || 0);
+        }
+        
+        // 格式化文件大小
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        // 获取状态徽章
+        function getStateBadge(state) {
+            const stateMap = {
+                'R': ['badge-success', '运行中'],
+                'RUNNING': ['badge-success', '运行中'],
+                'PD': ['badge-warning', '等待中'],
+                'PENDING': ['badge-warning', '等待中'],
+                'S': ['badge-info', '暂停'],
+                'SUSPENDED': ['badge-info', '暂停'],
+                'CG': ['badge-primary', '完成中'],
+                'COMPLETING': ['badge-primary', '完成中'],
+                'CD': ['badge-success', '已完成'],
+                'COMPLETED': ['badge-success', '已完成'],
+                'F': ['badge-danger', '失败'],
+                'FAILED': ['badge-danger', '失败'],
+                'CA': ['badge-danger', '已取消'],
+                'CANCELLED': ['badge-danger', '已取消'],
+                'TO': ['badge-danger', '超时'],
+                'TIMEOUT': ['badge-danger', '超时'],
+                'idle': ['badge-success', '空闲'],
+                'alloc': ['badge-warning', '已分配'],
+                'mix': ['badge-info', '混合'],
+                'down': ['badge-danger', '故障'],
+                'drain': ['badge-danger', '排空'],
+            };
+            const [className, label] = stateMap[state] || ['badge-primary', state];
+            return `<span class="badge ${className}">${label}</span>`;
+        }
+        
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initSocketIO();
+            checkUserStatus();
+        });
+        
+        // 检查用户登录状态并控制功能显示
+        async function checkUserStatus() {
+            try {
+                const response = await fetch('/api/current-user');
+                const data = await response.json();
+                
+                if (!data.logged_in) {
+                    // 未登录，跳转到登录页
+                    window.location.href = '/login';
+                    return;
+                }
+                
+                // 设置用户信息
+                window.currentUserType = data.user_type;
+                window.currentUsername = data.username;
+                
+                // 更新界面显示
+                updateUIForUserType(data.user_type);
+            } catch (e) {
+                console.error('检查用户状态失败:', e);
+            }
+        }
+        
+        // 根据用户类型更新界面
+        function updateUIForUserType(userType) {
+            // 需要管理员权限的元素
+            const adminElements = document.querySelectorAll('.admin-only');
+            
+            if (userType === 'admin') {
+                // 管理员，显示所有管理功能
+                adminElements.forEach(el => el.style.display = '');
+                document.getElementById('current-user-type').textContent = '管理员';
+                document.getElementById('current-user-type').className = 'text-xs text-red-500 font-medium';
+            } else {
+                // 普通用户，隐藏管理功能
+                adminElements.forEach(el => el.style.display = 'none');
+                document.getElementById('current-user-type').textContent = '普通用户';
+                document.getElementById('current-user-type').className = 'text-xs text-green-500 font-medium';
+            }
+            
+            // 显示用户名
+            document.getElementById('current-username').textContent = window.currentUsername || '--';
+            
+            // 隐藏提交作业按钮（普通用户可以提交）
+            const submitBtn = document.getElementById('submit-job-btn');
+            if (submitBtn) {
+                submitBtn.style.display = '';
+            }
+        }
+        
+        // 登出
+        async function logout() {
+            try {
+                await fetch('/api/logout', {method: 'POST'});
+                window.location.href = '/login';
+            } catch (e) {
+                console.error('登出失败:', e);
+            }
+        }
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

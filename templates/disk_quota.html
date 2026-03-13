@@ -1,0 +1,385 @@
+{% extends "base.html" %}
+
+{% block title %}磁盘配额 - Slurm 集群监控系统{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-slate-800">
+            <i class="fas fa-hdd text-primary-500 mr-2"></i>磁盘配额管理
+        </h1>
+        <p class="text-slate-500 mt-1">监控和管理用户及组的磁盘使用配额</p>
+    </div>
+
+    <!-- 核心指标卡片 -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-slate-500">用户配额数</p>
+                    <p class="text-2xl font-bold text-slate-800" id="user-count">--</p>
+                </div>
+                <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-user text-blue-600 text-xl"></i>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-slate-500">超限用户</p>
+                    <p class="text-2xl font-bold text-red-600" id="over-limit-users">--</p>
+                </div>
+                <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-slate-500">接近软限</p>
+                    <p class="text-2xl font-bold text-yellow-600" id="warning-users">--</p>
+                </div>
+                <div class="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-exclamation-circle text-yellow-600 text-xl"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 用户配额表格 -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+        <div class="p-4 border-b border-slate-200 flex gap-4 flex-wrap">
+            <input type="text" id="quota-search" onkeyup="filterQuota()" placeholder="搜索用户名..." class="px-4 py-2 border border-slate-300 rounded-lg text-sm flex-1 min-w-[200px]">
+            <select id="quota-status-filter" onchange="filterQuota()" class="px-4 py-2 border border-slate-300 rounded-lg text-sm">
+                <option value="">所有状态</option>
+                <option value="normal">正常</option>
+                <option value="warning">接近软限</option>
+                <option value="over">超限</option>
+            </select>
+            <button onclick="openSetQuotaModal()" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg text-sm admin-only">
+                <i class="fas fa-cog mr-2"></i>设置配额
+            </button>
+            <button onclick="loadDiskQuota()" class="px-4 py-2 bg-slate-500 hover:bg-slate-600 text-white rounded-lg text-sm">
+                <i class="fas fa-sync-alt mr-2"></i>刷新
+            </button>
+        </div>
+
+        <!-- 用户配额表格 -->
+        <div id="users-quota-panel" class="p-4">
+            <div class="overflow-x-auto">
+                <table class="w-full table-modern">
+                    <thead>
+                        <tr>
+                            <th class="px-4 py-3 text-left">用户</th>
+                            <th class="px-4 py-3 text-left">已用空间</th>
+                            <th class="px-4 py-3 text-left">空间限制</th>
+                            <th class="px-4 py-3 text-left">空间使用率</th>
+                            <th class="px-4 py-3 text-left">已用文件数</th>
+                            <th class="px-4 py-3 text-left">文件数限制</th>
+                            <th class="px-4 py-3 text-left">状态</th>
+                        </tr>
+                    </thead>
+                    <tbody id="quota-table-body">
+                        <tr>
+                            <td colspan="7" class="px-4 py-8 text-center text-slate-500">
+                                <i class="fas fa-spinner fa-spin mr-2"></i>加载中...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 设置配额模态框 -->
+<div id="set-quota-modal" class="modal">
+    <div class="modal-content max-w-md overflow-visible rounded-xl">
+        <!-- 头部 -->
+        <div class="bg-gradient-to-r from-primary-500 to-primary-600 px-6 py-4 rounded-t-xl">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-white">
+                    <i class="fas fa-cog mr-2"></i>设置用户磁盘配额
+                </h3>
+                <button onclick="closeSetQuotaModal()" class="text-white/80 hover:text-white">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 表单内容 -->
+        <div class="p-6">
+            <form id="set-quota-form" onsubmit="return submitSetQuota(event)">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">用户名 <span class="text-red-500">*</span></label>
+                        <input type="text" id="quota-username" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" placeholder="输入用户名" required>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 mb-1">空间软限制</label>
+                            <div class="flex">
+                                <input type="number" id="quota-soft-limit" class="flex-1 px-2 py-1.5 border border-slate-300 rounded-l-lg text-sm" placeholder="数值">
+                                <select id="quota-soft-unit" class="px-1 py-1.5 border border-l-0 border-slate-300 rounded-r-lg bg-slate-50 text-xs">
+                                    <option value="K">K</option>
+                                    <option value="M">M</option>
+                                    <option value="G" selected>G</option>
+                                    <option value="T">T</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 mb-1">空间硬限制</label>
+                            <div class="flex">
+                                <input type="number" id="quota-hard-limit" class="flex-1 px-2 py-1.5 border border-slate-300 rounded-l-lg text-sm" placeholder="数值">
+                                <select id="quota-hard-unit" class="px-1 py-1.5 border border-l-0 border-slate-300 rounded-r-lg bg-slate-50 text-xs">
+                                    <option value="K">K</option>
+                                    <option value="M">M</option>
+                                    <option value="G" selected>G</option>
+                                    <option value="T">T</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 mb-1">文件数软限制</label>
+                            <input type="number" id="quota-files-soft" class="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-sm" placeholder="文件数">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-500 mb-1">文件数硬限制</label>
+                            <input type="number" id="quota-files-hard" class="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-sm" placeholder="文件数">
+                        </div>
+                    </div>
+                    
+                    <div class="text-xs text-slate-500">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        设置为0表示不限制
+                    </div>
+                </div>
+                
+                <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-200">
+                    <button type="button" onclick="closeSetQuotaModal()" class="px-5 py-2.5 text-slate-600 hover:bg-slate-100 rounded-lg font-medium">取消</button>
+                    <button type="submit" class="px-5 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white rounded-lg font-medium shadow-md">
+                        <i class="fas fa-save mr-2"></i>保存
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentQuotaData = { users: [] };
+
+function parseSize(sizeStr) {
+    if (!sizeStr || sizeStr === '-' || sizeStr === '0') return 0;
+    const num = parseFloat(sizeStr);
+    if (sizeStr.includes('T')) return num * 1024 * 1024;
+    if (sizeStr.includes('G')) return num * 1024;
+    if (sizeStr.includes('M')) return num;
+    if (sizeStr.includes('K')) return num / 1024;
+    return num;
+}
+
+function formatSize(sizeStr) {
+    if (!sizeStr || sizeStr === '-' || sizeStr === '0') return '-';
+    return sizeStr;
+}
+
+function getQuotaStatus(used, soft, hard) {
+    if (hard === '-' || soft === '-') return { status: 'normal', label: '未限制', class: 'bg-slate-100 text-slate-600' };
+
+    const usedNum = parseSize(used);
+    const softNum = parseSize(soft);
+    const hardNum = parseSize(hard);
+
+    if (hardNum > 0 && usedNum >= hardNum) {
+        return { status: 'over', label: '超限', class: 'bg-red-100 text-red-700' };
+    }
+    if (softNum > 0 && usedNum >= softNum) {
+        return { status: 'warning', label: '接近软限', class: 'bg-yellow-100 text-yellow-700' };
+    }
+    return { status: 'normal', label: '正常', class: 'bg-green-100 text-green-700' };
+}
+
+function getUsagePercent(used, limit) {
+    if (limit === '-' || limit === '0') return 0;
+    const usedNum = parseSize(used);
+    const limitNum = parseSize(limit);
+    if (limitNum === 0) return 0;
+    return Math.min(100, Math.round((usedNum / limitNum) * 100));
+}
+
+function getProgressBarColor(percent, status) {
+    if (status === 'over') return 'bg-red-500';
+    if (status === 'warning') return 'bg-yellow-500';
+    return 'bg-green-500';
+}
+
+function renderQuotaTable(data, tbodyId) {
+    const tbody = document.getElementById(tbodyId);
+    const search = document.getElementById('quota-search').value.toLowerCase();
+    const statusFilter = document.getElementById('quota-status-filter').value;
+
+    let filteredData = data.filter(item => {
+        const matchesSearch = item.name.toLowerCase().includes(search);
+        const status = getQuotaStatus(item.used_space, item.soft_limit, item.hard_limit);
+        const matchesStatus = !statusFilter || status.status === statusFilter;
+        return matchesSearch && matchesStatus;
+    });
+
+    if (filteredData.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="px-4 py-8 text-center text-slate-500">
+                    <i class="fas fa-inbox mr-2"></i>暂无数据
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = filteredData.map(item => {
+        const status = getQuotaStatus(item.used_space, item.soft_limit, item.hard_limit);
+        const usagePercent = getUsagePercent(item.used_space, item.hard_limit);
+        const progressColor = getProgressBarColor(usagePercent, status.status);
+
+        return `
+            <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                <td class="px-4 py-3 font-medium text-slate-800">${item.name}</td>
+                <td class="px-4 py-3 text-slate-600">${formatSize(item.used_space)}</td>
+                <td class="px-4 py-3 text-slate-600">
+                    <div>软限: ${formatSize(item.soft_limit)}</div>
+                    <div class="text-xs text-slate-500">硬限: ${formatSize(item.hard_limit)}</div>
+                </td>
+                <td class="px-4 py-3">
+                    <div class="w-32 bg-slate-200 rounded-full h-2 mb-1">
+                        <div class="${progressColor} h-2 rounded-full" style="width: ${usagePercent}%"></div>
+                    </div>
+                    <span class="text-xs text-slate-500">${usagePercent}%</span>
+                </td>
+                <td class="px-4 py-3 text-slate-600">${item.used_files || '-'}</td>
+                <td class="px-4 py-3 text-slate-600">
+                    <div>软限: ${item.soft_files || '-'}</div>
+                    <div class="text-xs text-slate-500">硬限: ${item.hard_files || '-'}</div>
+                </td>
+                <td class="px-4 py-3">
+                    <span class="px-2 py-1 rounded-full text-xs font-medium ${status.class}">${status.label}</span>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function filterQuota() {
+    renderQuotaTable(currentQuotaData.users, 'quota-table-body');
+}
+
+function openSetQuotaModal() {
+    document.getElementById('set-quota-modal').classList.add('active');
+    document.getElementById('quota-username').value = '';
+    document.getElementById('quota-soft-limit').value = '';
+    document.getElementById('quota-hard-limit').value = '';
+    document.getElementById('quota-files-soft').value = '';
+    document.getElementById('quota-files-hard').value = '';
+}
+
+function closeSetQuotaModal() {
+    document.getElementById('set-quota-modal').classList.remove('active');
+}
+
+function submitSetQuota(event) {
+    event.preventDefault();
+    
+    const username = document.getElementById('quota-username').value.trim();
+    const softLimit = document.getElementById('quota-soft-limit').value;
+    const softUnit = document.getElementById('quota-soft-unit').value;
+    const hardLimit = document.getElementById('quota-hard-limit').value;
+    const hardUnit = document.getElementById('quota-hard-unit').value;
+    const filesSoft = document.getElementById('quota-files-soft').value;
+    const filesHard = document.getElementById('quota-files-hard').value;
+    
+    if (!username) {
+        alert('请输入用户名');
+        return false;
+    }
+    
+    const spaceSoft = softLimit ? softLimit + softUnit : '0';
+    const spaceHard = hardLimit ? hardLimit + hardUnit : '0';
+    const fileSoft = filesSoft || '0';
+    const fileHard = filesHard || '0';
+    
+    fetch('/api/disk-quota/set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            username,
+            soft_limit: spaceSoft,
+            hard_limit: spaceHard,
+            soft_files: fileSoft,
+            hard_files: fileHard
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert('配额设置成功');
+            closeSetQuotaModal();
+            loadDiskQuota();
+        } else {
+            alert('设置失败: ' + data.message);
+        }
+    })
+    .catch(err => {
+        alert('请求失败: ' + err.message);
+    });
+    
+    return false;
+}
+
+function loadDiskQuota() {
+    fetch('/api/disk-quota')
+        .then(res => res.json())
+        .then(data => {
+            currentQuotaData = data;
+
+            // 更新指标卡片
+            document.getElementById('user-count').textContent = data.summary?.total_users || data.users?.length || 0;
+
+            // 计算超限和接近软限用户
+            let overLimit = 0;
+            let warning = 0;
+            data.users.forEach(u => {
+                const status = getQuotaStatus(u.used_space, u.soft_limit, u.hard_limit);
+                if (status.status === 'over') overLimit++;
+                if (status.status === 'warning') warning++;
+            });
+            document.getElementById('over-limit-users').textContent = overLimit;
+            document.getElementById('warning-users').textContent = warning;
+
+            // 渲染表格
+            renderQuotaTable(data.users, 'quota-table-body');
+        })
+        .catch(err => {
+            console.error('加载磁盘配额失败:', err);
+            document.getElementById('quota-table-body').innerHTML = `
+                <tr>
+                    <td colspan="7" class="px-4 py-8 text-center text-red-500">
+                        <i class="fas fa-exclamation-circle mr-2"></i>加载失败
+                    </td>
+                </tr>
+            `;
+        });
+}
+
+// 页面加载时获取数据
+document.addEventListener('DOMContentLoaded', function() {
+    loadDiskQuota();
+});
+</script>
+{% endblock %}

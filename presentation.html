@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slurm 集群监控系统 - 项目汇报</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap');
+        
+        * {
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+        
+        .slide {
+            width: 1280px;
+            height: 720px;
+            margin: 0 auto 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            page-break-after: always;
+        }
+        
+        .slide-content {
+            padding: 60px 80px;
+            height: 100%;
+            color: white;
+        }
+        
+        .slide-white {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        }
+        
+        .slide-white .slide-content {
+            color: #1e293b;
+        }
+        
+        .slide-dark {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        }
+        
+        .slide-number {
+            position: absolute;
+            bottom: 30px;
+            right: 40px;
+            font-size: 18px;
+            opacity: 0.6;
+        }
+        
+        .title-main {
+            font-size: 56px;
+            font-weight: 900;
+            margin-bottom: 20px;
+            line-height: 1.2;
+        }
+        
+        .title-slide {
+            font-size: 42px;
+            font-weight: 700;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 4px solid rgba(255,255,255,0.3);
+        }
+        
+        .slide-white .title-slide {
+            border-bottom-color: #3b82f6;
+            color: #1e40af;
+        }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .slide-white .card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        
+        .icon-box {
+            width: 64px;
+            height: 64px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            margin-bottom: 16px;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+        }
+        
+        .stat-number {
+            font-size: 48px;
+            font-weight: 900;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .arrow-up { color: #10b981; }
+        .arrow-down { color: #ef4444; }
+        
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .comparison-table th,
+        .comparison-table td {
+            padding: 16px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        .slide-white .comparison-table th,
+        .slide-white .comparison-table td {
+            border-bottom-color: #e2e8f0;
+        }
+        
+        .comparison-table th {
+            background: rgba(255,255,255,0.1);
+            font-weight: 600;
+        }
+        
+        .slide-white .comparison-table th {
+            background: #f1f5f9;
+        }
+        
+        .check-green { color: #10b981; }
+        .cross-red { color: #ef4444; }
+        
+        @media print {
+            .slide {
+                box-shadow: none;
+                margin: 0;
+                page-break-after: always;
+            }
+        }
+        
+        @media screen and (max-width: 1320px) {
+            .slide {
+                width: 100%;
+                height: auto;
+                min-height: 600px;
+            }
+            .slide-content {
+                padding: 40px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 py-10">
+
+    <!-- Slide 1: 封面 -->
+    <div class="slide">
+        <div class="slide-content flex flex-col justify-center items-center text-center">
+            <div class="mb-8">
+                <i class="fas fa-server text-8xl mb-6 opacity-80"></i>
+            </div>
+            <h1 class="text-6xl font-black mb-6">Slurm 集群监控系统</h1>
+            <p class="text-3xl font-light mb-12 opacity-90">建设成果汇报</p>
+            <div class="bg-white/20 backdrop-blur px-8 py-4 rounded-full">
+                <p class="text-xl">打造智能化 HPC 集群管理平台</p>
+            </div>
+            <div class="mt-16 text-lg opacity-70">
+                <p>汇报人：[您的姓名] &nbsp;&nbsp;|&nbsp;&nbsp; 日期：2026年3月</p>
+            </div>
+        </div>
+        <div class="slide-number">1 / 12</div>
+    </div>
+
+    <!-- Slide 2: 项目背景 -->
+    <div class="slide slide-white">
+        <div class="slide-content">
+            <h2 class="title-slide"><i class="fas fa-bullseye mr-4"></i>项目背景与挑战</h2>
+            
+            <div class="grid grid-cols-2 gap-8">
+                <div>
+                    <h3 class="text-2xl font-bold mb-6 text-red-600"><i class="fas fa-exclamation-triangle mr-2"></i>当前面临的挑战</h3>
+                    <div class="space-y-4">
+                        <div class="card">
+                            <div class="flex items-start">
+                                <span class="text-3xl mr-4">📊</span>
+                                <div>
+                                    <p class="font-bold text-lg">集群状态不透明</p>
+                                    <p class="text-gray-600">管理员难以实时掌握集群健康状况</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="flex items-start">
+                                <span class="text-3xl mr-4">⏱️</span>
+                                <div>
+                                    <p class="font-bold text-lg">资源使用不明</p>
+                                    <p class="text-gray-600">无法准确统计各用户的资源消耗</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="flex items-start">
+                                <span class="text-3xl mr-4">🔧</span>
+                                <div>
+                                    <p class="font-bold text-lg">管理效率低下</p>
+                                    <p class="text-gray-600">依赖命令行操作，复杂易出错</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 class="text-2xl font-bold mb-6 text-blue-600"><i class="fas fa-flag mr-2"></i>建设目标</h3>
+                    <div class="card bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200 h-64 flex items-center justify-center">
+                        <div class="text-center">
+                            <p class="text-3xl font-bold text-blue-800 mb-4">构建一套</p>
+                            <p class="text-4xl font-black text-blue-600 mb-4">可视化、实时化、智能化</p>
+                            <p class="text-3xl font-bold text-blue-800">的集群监控管理平台</p>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-3 gap-4 mt-6">
+                        <div class="text-center p-4 bg-green-50 rounded-xl">
+                            <i class="fas fa-chart-pie text-3xl text-green-600 mb-2"></i>
+                            <p class="font-bold text-green-800">可视化</p>
+                        </div>
+                        <div class="text-center p-4 bg-purple-50 rounded-xl">
+                            <i class="fas fa-bolt text-3xl text-purple-600 mb-2"></i>
+                            <p class="font-bold text-purple-800">实时化</p>
+                        </div>
+                        <div class="text-center p-4 bg-orange-50 rounded-xl">
+                            <i class="fas fa-brain text-3xl text-orange-600 mb-2"></i>
+                            <p class="font-bold text-orange-800">智能化</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number text-gray-400">2 / 12</div>
+    </div>
+
+    <!-- Slide 3: 系统架构 -->
+    <div class="slide">
+        <div class="slide-content">
+            <h2 class="title-slide"><i class="fas fa-sitemap mr-4"></i>系统架构与技术栈</h2>
+            
+            <div class="grid grid-cols-5 gap-4 mb-8">
+                <div class="col-span-3">
+                    <div class="space-y-3">
+                        <div class="card flex items-center">
+                            <div class="w-32 font-bold">用户层</div>
+                            <div class="flex gap-4 flex-1">
+                                <span class="px-4 py-2 bg-white/20 rounded-lg"><i class="fas fa-desktop mr-2"></i>PC浏览器</span>
+                                <span class="px-4 py-2 bg-white/20 rounded-lg"><i class="fas fa-mobile-alt mr-2"></i>手机/平板</span>
+                                <span class="px-4 py-2 bg-white/20 rounded-lg"><i class="fas fa-tv mr-2"></i>运维大屏</span>
+                            </div>
+                        </div>
+                        
+                        <div class="text-center"><i class="fas fa-arrow-down text-2xl opacity-50"></i></div>
+                        
+                        <div class="card bg-white/25">
+                            <div class="font-bold mb-3"><i class="fas fa-server mr-2"></i>Web 服务层 (Flask)</div>
+                            <div class="grid grid-cols-3 gap-3">
+                                <div class="bg-white/20 p-3 rounded-lg text-center">
+                                    <i class="fas fa-api text-2xl mb-2"></i>
+                                    <p class="text-sm">REST API</p>
+                                    <p class="text-xs opacity-70">数据接口</p>
+                                </div>
+                                <div class="bg-white/20 p-3 rounded-lg text-center">
+                                    <i class="fas fa-bolt text-2xl mb-2"></i>
+                                    <p class="text-sm">WebSocket</p>
+                                    <p class="text-xs opacity-70">实时推送</p>
+                                </div>
+                                <div class="bg-white/20 p-3 rounded-lg text-center">
+                                    <i class="fas fa-terminal text-2xl mb-2"></i>
+                                    <p class="text-sm">WebShell</p>
+                                    <p class="text-xs opacity-70">浏览器终端</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="text-center"><i class="fas fa-arrow-down text-2xl opacity-50"></i></div>
+                        
+                        <div class="card flex items-center">
+                            <div class="w-32 font-bold">集群层</div>
+                            <div class="flex gap-3 flex-1">
+                                <span class="px-3 py-2 bg-white/20 rounded-lg text-sm">slurmctld</span>
+                                <span class="px-3 py-2 bg-white/20 rounded-lg text-sm">slurmd</span>
+                                <span class="px-3 py-2 bg-white/20 rounded-lg text-sm">NVIDIA GPU</span>
+                                <span class="px-3 py-2 bg-white/20 rounded-lg text-sm">记账数据库</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-span-2">
+                    <h3 class="text-xl font-bold mb-4">技术栈</h3>
+                    <div class="space-y-3">
+                        <div class="card py-3">
+                            <p class="text-sm opacity-70 mb-1">后端</p>
+                            <p class="font-bold">Python Flask + Flask-SocketIO</p>
+                        </div>
+                        <div class="card py-3">
+                            <p class="text-sm opacity-70 mb-1">前端</p>
+                            <p class="font-bold">HTML5 + Tailwind CSS + Chart.js</p>
+                        </div>
+                        <div class="card py-3">
+                            <p class="text-sm opacity-70 mb-1">终端</p>
+                            <p class="font-bold">XTerm.js + WebSocket</p>
+                        </div>
+                        <div class="card py-3">
+                            <p class="text-sm opacity-70 mb-1">认证</p>
+                            <p class="font-bold">PAM 系统认证</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">3 / 12</div>
+    </div>
+
+    <!-- Slide 4: 核心功能1 - 实时监控 -->
+    <div class="slide slide-white">
+        <div class="slide-content">
+            <h2 class="title-slide"><i class="fas fa-tachometer-alt mr-4"></i>核心功能：实时监控仪表盘</h2>
+            
+            <p class="text-xl text-gray-600 mb-6">集群状态一目了然，5秒自动刷新</p>
+            
+            <div class="feature-grid mb-8">
+                <div class="card text-center p-6">
+                    <div class="icon-box bg-blue-500 text-white mx-auto">
+                        <i class="fas fa-desktop"></i>
+                    </div>
+                    <h4 class="font-bold text-lg mb-2">节点状态</h4>
+                    <p class="text-sm text-gray-600">总/空闲/已分配/故障/混合</p>
+                    <div class="mt-4 flex justify-center gap-2 text-xs">
+                        <span class="px-2 py-1 bg-green-100 text-green-700 rounded">idle</span>
+                        <span class="px-2 py-1 bg-yellow-100 text-yellow-700 rounded">alloc</span>
+                        <span class="px-2 py-1 bg-red-100 text-red-700 rounded">down</span>
+                    </div>
+                </div>
+                
+                <div class="card text-center p-6">
+                    <div class="icon-box bg-emerald-500 text-white mx-auto">
+                        <i class="fas fa-tasks"></i>
+                    </div>
+                    <h4 class="font-bold text-lg mb-2">作业状态</h4>
+                    <p class="text-sm text-gray-600">总/运行中/等待中/暂停</p>
+                    <div class="mt-4 flex justify-center gap-2 text-xs">
+                        <span class="px-2 py-1 bg-green-100 text-green-700 rounded">R</span>
+                        <span class="px-2 py-1 bg-yellow-100 text-yellow-700 rounded">PD</span>
+                        <span class="px-2 py-1 bg-purple-100 text-purple-700 rounded">S</span>
+                    </div>
+                </div>
+                
+                <div class="card text-center p-6">
+                    <div class="icon-box bg-indigo-500 text-white mx-auto">
+                        <i class="fas fa-microchip"></i>
+                    </div>
+                    <h4 class="font-bold text-lg mb-2">CPU 资源</h4>
+                    <p class="text-sm text-gray-600">总核心/已分配/使用率</p>
+                    <div class="mt-4">
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-indigo-500 h-2 rounded-full" style="width: 65%"></div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">65% 使用率</p>
+                    </div>
+                </div>
+                
+                <div class="card text-center p-6">
+                    <div class="icon-box bg-purple-500 text-white mx-auto">
+                        <i class="fas fa-gamepad"></i>
+                    </div>
+                    <h4 class="font-bold text-lg mb-2">GPU 资源</h4>
+                    <p class="text-sm text-gray-600">总卡数/已分配/利用率</p>
+                    <div class="mt-4">
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-purple-500 h-2 rounded-full" style="width: 80%"></div>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">80% 利用率</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-3 gap-6">
+                <div class="card flex items-center gap-4">
+                    <i class="fas fa-chart-pie text-4xl text-blue-500"></i>
+                    <div>
+                        <p class="font-bold">可视化图表</p>
+                        <p class="text-sm text-gray-600">饼图展示资源分布</p>
+                    </div>
+                </div>
+                <div class="card flex items-center gap-4">
+                    <i class="fas fa-bolt text-4xl text-yellow-500"></i>
+                    <div>
+                        <p class="font-bold">实时推送</p>
+                        <p class="text-sm text-gray-600">WebSocket 秒级更新</p>
+                    </div>
+                </div>
+                <div class="card flex items-center gap-4">
+                    <i class="fas fa-bell text-4xl text-red-500"></i>
+                    <div>
+                        <p class="font-bold">异常预警</p>
+                        <p class="text-sm text-gray-600">故障节点红色标识</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number text-gray-400">4 / 12</div>
+    </div>
+
+    <!-- Slide 5: 核心功能2 - 资源统计 -->
+    <div class="slide">
+        <div class="slide-content">
+            <h2 class="title-slide"><i class="fas fa-chart-bar mr-4"></i>核心功能：用户资源统计分析 ⭐</h2>
+            
+            <div class="grid grid-cols-2 gap-8">
+                <div>
+                    <h3 class="text-2xl font-bold mb-4 text-yellow-300">解决的核心痛点</h3>
+                    <div class="card mb-6">
+                        <p class="text-lg">以往无法准确统计各用户的实际资源消耗，难以进行：</p>
+                        <ul class="mt-4 space-y-2">
+                            <li><i class="fas fa-times-circle text-red-400 mr-2"></i>成本核算与计费</li>
+                            <li><i class="fas fa-times-circle text-red-400 mr-2"></i>资源分配优化</li>
+                            <li><i class="fas fa-times-circle text-red-400 mr-2"></i>使用趋势分析</li>
+                        </ul>
+                    </div>
+                    
+                    <h3 class="text-2xl font-bold mb-4 text-green-300">统计维度</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="card text-center">
+                            <p class="text-3xl mb-2">💻</p>
+                            <p class="font-bold">CPU 核时</p>
+                            <p class="text-sm opacity-70">核心数 × 时间</p>
+                        </div>
+                        <div class="card text-center">
+                            <p class="text-3xl mb-2">🎮</p>
+                            <p class="font-bold">GPU 核时</p>
+                            <p class="text-sm opacity-70">卡数 × 时间</p>
+                        </div>
+                        <div class="card text-center">
+                            <p class="text-3xl mb-2">📊</p>
+                            <p class="font-bold">占比分析</p>
+                            <p class="text-sm opacity-70">个人/总量 %</p>
+                        </div>
+                        <div class="card text-center">
+                            <p class="text-3xl mb-2">📈</p>
+                            <p class="font-bold">趋势分析</p>
+                            <p class="text-sm opacity-70">多时间段对比</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 class="text-2xl font-bold mb-4">展示效果示例</h3>
+                    <div class="card bg-white text-gray-800 p-6">
+                        <p class="text-sm text-gray-500 mb-4">用户资源使用情况（过去7天）</p>
+                        <p class="font-bold mb-4">总计: CPU核时 15,234 分钟 | GPU核时 3,456 分钟</p>
+                        
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b-2 border-gray-200">
+                                    <th class="text-left py-2">排名</th>
+                                    <th class="text-left">用户</th>
+                                    <th class="text-left">作业数</th>
+                                    <th class="text-left">CPU核时</th>
+                                    <th class="text-left">占比</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="border-b border-gray-100">
+                                    <td class="py-3 font-bold text-yellow-600">1</td>
+                                    <td>user01</td>
+                                    <td>25</td>
+                                    <td>5,234.5</td>
+                                    <td>
+                                        <div class="flex items-center">
+                                            <div class="w-16 bg-gray-200 rounded-full h-2 mr-2">
+                                                <div class="bg-blue-500 h-2 rounded-full" style="width: 34%"></div>
+                                            </div>
+                                            <span>34%</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr class="border-b border-gray-100">
+                                    <td class="py-3 font-bold text-gray-400">2</td>
+                                    <td>user02</td>
+                                    <td>15</td>
+                                    <td>3,123.2</td>
+                                    <td>
+                                        <div class="flex items-center">
+                                            <div class="w-16 bg-gray-200 rounded-full h-2 mr-2">
+                                                <div class="bg-blue-500 h-2 rounded-full" style="width: 21%"></div>
+                                            </div>
+                                            <span>21%</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="py-3 font-bold text-orange-400">3</td>
+                                    <td>user03</td>
+                                    <td>30</td>
+                                    <td>2,876.8</td>
+                                    <td>
+                                        <div class="flex items-center">
+                                            <div class="w-16 bg-gray-200 rounded-full h-2 mr-2">
+                                                <div class="bg-blue-500 h-2 rounded-full" style="width: 19%"></div>
+                                            </div>
+                                            <span>19%</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="mt-4 flex gap-4">
+                        <span class="px-4 py-2 bg-white/20 rounded-lg text-sm"><i class="fas fa-clock mr-2"></i>支持 24h/7d/30d/90d</span>
+                        <span class="px-4 py-2 bg-white/20 rounded-lg text-sm"><i class="fas fa-download mr-2"></i>可导出数据</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">5 / 12</div>
+    </div>
+
+    <!-- Slide 6: 核心功能3 - WebShell -->
+    <div class="slide slide-white">
+        <div class="slide-content">
+            <h2 class="title-slide"><i class="fas fa-terminal mr-4"></i>创新功能：WebShell 浏览器终端</h2>
+            
+            <div class="grid grid-cols-2 gap-8">
+                <div>
+                    <h3 class="text-2xl font-bold mb-4 text-purple-600">功能介绍</h3>
+                    <p class="text-lg text-gray-600 mb-6">无需 SSH 客户端，通过浏览器即可访问系统终端</p>
+                    
+                    <div class="space-y-4">
+                        <div class="card flex items-center gap-4">
+                            <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center text-purple-600">
+                                <i class="fas fa-shield-alt text-xl"></i>
+                            </div>
+                            <div>
+                                <p class="font-bold">系统认证</p>
+                                <p class="text-sm text-gray-600">PAM 认证，与 SSH 登录一致</p>
+                            </div>
+                        </div>
+                        
+                        <div class="card flex items-center gap-4">
+                            <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center text-green-600">
+                                <i class="fas fa-desktop text-xl"></i>
+                            </div>
+                            <div>
+                                <p class="font-bold">终端仿真</p>
+                                <p class="text-sm text-gray-600">XTerm.js 支持颜色、光标、清屏</p>
+                            </div>
+                        </div>
+                        
+                        <div class="card flex items-center gap-4">
+                            <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-blue-600">
+                                <i class="fas fa-bolt text-xl"></i>
+                            </div>
+                            <div>
+                                <p class="font-bold">实时交互</p>
+                                <p class="text-sm text-gray-600">WebSocket 双向通信，无延迟</p>
+                            </div>
+                        </div>
+                        
+                        <div class="card flex items-center gap-4">
+                            <div class="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center text-orange-600">
+                                <i class="fas fa-clock text-xl"></i>
+                            </div>
+                            <div>
+                                <p class="font-bold">会话管理</p>
+                                <p class="text-sm text-gray-600">30分钟超时，自动退出</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 class="text-2xl font-bold mb-4 text-gray-700">应用场景</h3>
+                    <div class="card bg-gray-900 text-green-400 p-6 font-mono text-sm mb-6">
+                        <p class="opacity-50">$ ssh user@cluster</p>
+                        <p class="mb-4"># 不再需要 SSH 客户端！</p>
+                        
+                        <p class="text-white">$ sinfo</p>
+                        <p>PARTITION AVAIL  TIMELIMIT  NODES  STATE NODELIST</p>
+                        <p>cpu*         up   infinite      2   idle node[01-02]</p>
+                        <p>gpu          up   infinite      1   alloc gpu-node01</p>
+                        <p class="mt-4 text-white">$ squeue</p>
+                        <p>JOBID PARTITION  NAME  USER ST  TIME NODES</p>
+                        <p>12345 cpu       test  user1  R  2:34     1</p>
+                        <p class="mt-4 animate-pulse">_</p>
+                    </div>
+                    
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="text-center p-4 bg-purple-50 rounded-xl">
+                            <i class="fas fa-walking text-3xl text-purple-600 mb-2"></i>
+                            <p class="font-bold text-sm">外出应急</p>
+                            <p class="text-xs text-gray-500">手机浏览器即可操作</p>
+                        </div>
+                        <div class="text-center p-4 bg-green-50 rounded-xl">
+                            <i class="fas fa-user-graduate text-3xl text-green-600 mb-2"></i>
+                            <p class="font-bold text-sm">新手友好</p>
+                            <p class="text-xs text-gray-500">无需配置 SSH</p>
+                        </div>
+                        <div class="text-center p-4 bg-blue-50 rounded-xl">
+                            <i class="fas fa-clipboard-check text-3xl text-blue-600 mb-2"></i>
+                            <p class="font-bold text-sm">审计留痕</p>
+                            <p class="text-xs text-gray-500">操作可追溯</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number text-gray-400">6 / 12</div>
+    </div>
+
+    <!-- Slide 7: 应用效果 -->
+    <div class="slide">
+        <div class="slide-content">
+            <h2 class="title-slide"><i class="fas fa-chart-line mr-4"></i>应用效果与价值</h2>
+            
+            <h3 class="text-2xl font-bold mb-6">管理效率显著提升</h3>
+            
+            <div class="grid grid-cols-4 gap-6 mb-8">
+                <div class="card text-center p-6">
+                    <p class="text-sm opacity-70 mb-2">查看集群状态</p>
+                    <div class="flex justify-center items-end gap-2 mb-2">
+                        <span class="text-2xl text-gray-400">2-3分钟</span>
+                        <i class="fas fa-arrow-right text-yellow-400"></i>
+                        <span class="text-4xl font-bold text-green-400">5秒</span>
+                    </div>
+                    <p class="text-sm text-green-400 font-bold">提升 36 倍</p>
+                </div>
+                
+                <div class="card text-center p-6">
+                    <p class="text-sm opacity-70 mb-2">统计资源使用</p>
+                    <div class="flex justify-center items-end gap-2 mb-2">
+                        <span class="text-2xl text-gray-400">半天</span>
+                        <i class="fas fa-arrow-right text-yellow-400"></i>
+                        <span class="text-4xl font-bold text-green-400">实时</span>
+                    </div>
+                    <p class="text-sm text-green-400 font-bold">从 manual 到 auto</p>
+                </div>
+                
+                <div class="card text-center p-6">
+                    <p class="text-sm opacity-70 mb-2">取消异常作业</p>
+                    <div class="flex justify-center items-end gap-2 mb-2">
+                        <span class="text-2xl text-gray-400">逐个执行</span>
+                        <i class="fas fa-arrow-right text-yellow-400"></i>
+                        <span class="text-4xl font-bold text-green-400">一键</span>
+                    </div>
+                    <p class="text-sm text-green-400 font-bold">提升 10 倍</p>
+                </div>
+                
+                <div class="card text-center p-6">
+                    <p class="text-sm opacity-70 mb-2">排查节点故障</p>
+                    <div class="flex justify-center items-end gap-2 mb-2">
+                        <span class="text-2xl text-gray-400">数小时</span>
+                        <i class="fas fa-arrow-right text-yellow-400"></i>
+                        <span class="text-4xl font-bold text-green-400">立即</span>
+                    </div>
+                    <p class="text-sm text-green-400 font-bold">提升 20 倍</p>
+                </div>
+            </div>
+            
+            <h3 class="text-2xl font-bold mb-4">管理价值</h3>
+            <div class="grid grid-cols-2 gap-6">
+                <div class="card flex items-center gap-4">
+                    <div class="w-16 h-16 bg-blue-500 rounded-2xl flex items-center justify-center text-3xl">
+                        <i class="fas fa-eye"></i>
+                    </div>
+                    <div>
+                        <p class="font-bold text-xl">资源透明化</p>
+                        <p class="opacity-80">各用户资源使用清晰可见，支撑成本核算</p>
+                    </div>
+                </div>
+                
+                <div class="card flex items-center gap-4">
+                    <div class="w-16 h-16 bg-red-500 rounded-2xl flex items-center justify-center text-3xl">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div>
+                        <p class="font-bold text-xl">故障快速定位</p>
+                        <p class="opacity-80">节点状态实时监控，及时发现异常</p>
+                    </div>
+                </div>
+                
+                <div class="card flex items-center gap-4">
+                    <div class="w-16 h-16 bg-purple-500 rounded-2xl flex items-center justify-center text-3xl">
+                        <i class="fas fa-chart-pie"></i>
+                    </div>
+                    <div>
+                        <p class="font-bold text-xl">数据支撑决策</p>
+                        <p class="opacity-80">统计报表为扩容规划提供依据</p>
+                    </div>
+                </div>
+                
+                <div class="card flex items-center gap-4">
+                    <div class="w-16 h-16 bg-green-500 rounded-2xl flex items-center justify-center text-3xl">
+                        <i class="fas fa-coins"></i>
+                    </div>
+                    <div>
+                        <p class="font-bold text-xl">运维成本降低</p>
+                        <p class="opacity-80">Web 化管理，减少人工操作</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">7 / 12</div>
+    </div>
+
+    <!-- Slide 8: 对比优势 -->
+    <div class="slide slide-white">
+        <div class="slide-content">
+            <h2 class="title-slide"><i class="fas fa-balance-scale mr-4"></i>对比优势分析</h2>
+            
+            <table class="comparison-table text-base">
+                <thead>
+                    <tr>
+                        <th class="w-1/5">对比维度</th>
+                        <th class="w-1/4">传统命令行</th>
+                        <th class="w-1/4">其他监控系统</th>
+                        <th class="w-1/4 text-blue-600">本系统</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="font-bold">部署复杂度</td>
+                        <td>无需部署</td>
+                        <td>需复杂配置</td>
+                        <td class="text-blue-600 font-bold"><i class="fas fa-check-circle mr-2"></i>一键启动，5分钟部署</td>
+                    </tr>
+                    <tr>
+                        <td class="font-bold">实时性</td>
+                        <td>手动刷新</td>
+                        <td>定时刷新</td>
+                        <td class="text-blue-600 font-bold"><i class="fas fa-check-circle mr-2"></i>WebSocket 实时推送</td>
+                    </tr>
+                    <tr>
+                        <td class="font-bold">用户统计</td>
+                        <td>手动计算</td>
+                        <td>基础统计</td>
+                        <td class="text-blue-600 font-bold"><i class="fas fa-check-circle mr-2"></i>CPU/GPU核时精准统计</td>
+                    </tr>
+                    <tr>
+                        <td class="font-bold">WebShell</td>
+                        <td class="text-red-500"><i class="fas fa-times-circle"></i> 不支持</td>
+                        <td class="text-red-500"><i class="fas fa-times-circle"></i> 不支持</td>
+                        <td class="text-blue-600 font-bold"><i class="fas fa-check-circle mr-2"></i>内置浏览器终端</td>
+                    </tr>
+                    <tr>
+                        <td class="font-bold">移动端支持</td>
+                        <td class="text-red-500"><i class="fas fa-times-circle"></i> 不支持</td>
+                        <td>部分支持</td>
+                        <td class="text-blue-600 font-bold"><i class="fas fa-check-circle mr-2"></i>响应式设计</td>
+                    </tr>
+                    <tr>
+                        <td class="font-bold">密码保护</td>
+                        <td class="text-red-500"><i class="fas fa-times-circle"></i> 无</td>
+                        <td>部分支持</td>
+                        <td class="text-blue-600 font-bold"><i class="fas fa-check-circle mr-2"></i>敏感操作密码验证</td>
+                    </tr>
+                    <tr>
+                        <td class="font-bold">定制化</td>
+                        <td>需自行开发</td>
+                        <td>难以定制</td>
+                        <td class="text-blue-600 font-bold"><i class="fas fa-check-circle mr-2"></i>开源，自主可控</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div class="mt-8 p-6 bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl border-2 border-blue-200">
+                <p class="text-xl font-bold text-blue-800 text-center">
+                    <i class="fas fa-trophy text-yellow-500 mr-3"></i>
+                    核心竞争优势：专为 Slurm 深度优化，功能全面，部署简单，自主可控
+                </p>
+            </div>
+        </div>
+        <div class="slide-number text-gray-400">8 / 12</div>
+    </div>
+
+    <!-- Slide 9: 技术亮点 -->
+    <div class="slide">
+        <div class="slide-content">
+            <h2 class="title-slide"><i class="fas fa-cogs mr-4"></i>技术创新点</h2>
+            
+            <div class="grid grid-cols-2 gap-8">
+                <div class="card">
+                    <div class="flex items-center gap-4 mb-4">
+                        <div class="w-14 h-14 bg-blue-500 rounded-xl flex items-center justify-center text-2xl">
+                            <i class="fas fa-bolt"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold">实时通信架构</h3>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 text-center">
+                        <div class="p-4 bg-white/10 rounded-lg">
+                            <p class="text-sm opacity-70 mb-2">传统轮询</p>
+                            <p class="text-3xl mb-2">○─○─○─○</p>
+                            <p class="text-sm">延迟 5-30s</p>
+                            <p class="text-sm">资源消耗高</p>
+                        </div>
+                        <div class="p-4 bg-green-500/30 rounded-lg border-2 border-green-400">
+                            <p class="text-sm font-bold mb-2">WebSocket</p>
+                            <p class="text-3xl mb-2">◆────◆</p>
+                            <p class="text-sm">延迟 &lt;1s</p>
+                            <p class="text-sm">长连接推送</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="flex items-center gap-4 mb-4">
+                        <div class="w-14 h-14 bg-purple-500 rounded-xl flex items-center justify-center text-2xl">
+                            <i class="fas fa-database"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold">数据聚合优化</h3>
+                    </div>
+                    <ul class="space-y-3">
+                        <li class="flex items-center gap-3">
+                            <i class="fas fa-check-circle text-green-400"></i>
+                            <span>分页加载：历史记录默认30条，避免卡顿</span>
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <i class="fas fa-check-circle text-green-400"></i>
+                            <span>缓存机制：减少重复查询 Slurm</span>
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <i class="fas fa-check-circle text-green-400"></i>
+                            <span>超时控制：命令执行超时保护</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <div class="card">
+                    <div class="flex items-center gap-4 mb-4">
+                        <div class="w-14 h-14 bg-red-500 rounded-xl flex items-center justify-center text-2xl">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold">安全设计</h3>
+                    </div>
+                    <ul class="space-y-3">
+                        <li class="flex items-center gap-3">
+                            <i class="fas fa-check-circle text-green-400"></i>
+                            <span>PAM 认证：与系统用户体系集成</span>
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <i class="fas fa-check-circle text-green-400"></i>
+                            <span>密码保护：敏感操作二次确认</span>
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <i class="fas fa-check-circle text-green-400"></i>
+                            <span>会话超时：30分钟无操作自动退出</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <div class="card">
+                    <div class="flex items-center gap-4 mb-4">
+                        <div class="w-14 h-14 bg-orange-500 rounded-xl flex items-center justify-center text-2xl">
+                            <i class="fas fa-mobile-alt"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold">响应式界面</h3>
+                    </div>
+                    <ul class="space-y-3">
+                        <li class="flex items-center gap-3">
+                            <i class="fas fa-check-circle text-green-400"></i>
+                            <span>Tailwind CSS 现代化设计</span>
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <i class="fas fa-check-circle text-green-400"></i>
+                            <span>移动端适配，随时随地管理</span>
+                        </li>
+                        <li class="flex items-center gap-3">
+                            <i class="fas fa-check-circle text-green-400"></i>
+                            <span>暗色/亮色主题（规划中）</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">9 / 12</div>
+    </div>
+
+    <!-- Slide 10: 部署方案 -->
+    <div class="slide slide-white">
+        <div class="slide-content">
+            <h2 class="title-slide"><i class="fas fa-rocket mr-4"></i>部署方案</h2>
+            
+            <div class="grid grid-cols-3 gap-6">
+                <div class="card border-t-4 border-green-500">
+                    <div class="text-center mb-4">
+                        <div class="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center text-green-600 text-2xl mx-auto mb-3">
+                            <i class="fas fa-bolt"></i>
+                        </div>
+                        <h3 class="text-xl font-bold">快速部署</h3>
+                        <p class="text-sm text-gray-500">开发/测试环境</p>
+                    </div>
+                    <div class="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm mb-4">
+                        <p>$ ./start.sh</p>
+                        <p class="text-gray-500"># 访问 http://IP:5000</p>
+                    </div>
+                    <ul class="text-sm space-y-2">
+                        <li><i class="fas fa-check text-green-500 mr-2"></i>一键启动</li>
+                        <li><i class="fas fa-check text-green-500 mr-2"></i>无需配置</li>
+                        <li><i class="fas fa-check text-green-500 mr-2"></i>5分钟就绪</li>
+                    </ul>
+                </div>
+                
+                <div class="card border-t-4 border-blue-500">
+                    <div class="text-center mb-4">
+                        <div class="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-600 text-2xl mx-auto mb-3">
+                            <i class="fas fa-server"></i>
+                        </div>
+                        <h3 class="text-xl font-bold">Systemd 服务</h3>
+                        <p class="text-sm text-gray-500">生产环境推荐</p>
+                    </div>
+                    <div class="bg-gray-900 text-blue-400 p-4 rounded-lg font-mono text-sm mb-4">
+                        <p>$ sudo ./install.sh</p>
+                        <p class="text-gray-500"># 开机自启+日志管理</p>
+                    </div>
+                    <ul class="text-sm space-y-2">
+                        <li><i class="fas fa-check text-blue-500 mr-2"></i>开机自启动</li>
+                        <li><i class="fas fa-check text-blue-500 mr-2"></i>自动重启保护</li>
+                        <li><i class="fas fa-check text-blue-500 mr-2"></i>日志轮转</li>
+                    </ul>
+                </div>
+                
+                <div class="card border-t-4 border-purple-500">
+                    <div class="text-center mb-4">
+                        <div class="w-16 h-16 bg-purple-100 rounded-2xl flex items-center justify-center text-purple-600 text-2xl mx-auto mb-3">
+                            <i class="fas fa-cloud"></i>
+                        </div>
+                        <h3 class="text-xl font-bold">高可用部署</h3>
+                        <p class="text-sm text-gray-500">大规模集群</p>
+                    </div>
+                    <div class="bg-gray-900 text-purple-400 p-4 rounded-lg font-mono text-sm mb-4">
+                        <p>$ gunicorn -k gevent</p>
+                        <p class="text-gray-500"># Nginx + SSL</p>
+                    </div>
+                    <ul class="text-sm space-y-2">
+                        <li><i class="fas fa-check text-purple-500 mr-2"></i>高并发支持</li>
+                        <li><i class="fas fa-check text-purple-500 mr-2"></i>SSL 加密</li>
+                        <li><i class="fas fa-check text-purple-500 mr-2"></i>负载均衡</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="mt-8 card bg-gradient-to-r from-slate-50 to-gray-50">
+                <h4 class="font-bold text-lg mb-3"><i class="fas fa-info-circle text-blue-500 mr-2"></i>系统要求</h4>
+                <div class="grid grid-cols-4 gap-4 text-center">
+                    <div>
+                        <i class="fab fa-linux text-3xl text-gray-700 mb-2"></i>
+                        <p class="text-sm font-bold">Linux 系统</p>
+                        <p class="text-xs text-gray-500">CentOS/Ubuntu</p>
+                    </div>
+                    <div>
+                        <i class="fab fa-python text-3xl text-blue-500 mb-2"></i>
+                        <p class="text-sm font-bold">Python 3.7+</p>
+                        <p class="text-xs text-gray-500">Flask + SocketIO</p>
+                    </div>
+                    <div>
+                        <i class="fas fa-network-wired text-3xl text-green-600 mb-2"></i>
+                        <p class="text-sm font-bold">Slurm 集群</p>
+                        <p class="text-xs text-gray-500">已安装配置</p>
+                    </div>
+                    <div>
+                        <i class="fas fa-user-shield text-3xl text-purple-600 mb-2"></i>
+                        <p class="text-sm font-bold">root 权限</p>
+                        <p class="text-xs text-gray-500">WebShell 功能</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number text-gray-400">10 / 12</div>
+    </div>
+
+    <!-- Slide 11: 未来规划 -->
+    <div class="slide">
+        <div class="slide-content">
+            <h2 class="title-slide"><i class="fas fa-road mr-4"></i>未来发展规划</h2>
+            
+            <div class="grid grid-cols-3 gap-6">
+                <div class="card bg-gradient-to-b from-white/10 to-white/5">
+                    <div class="text-center mb-6">
+                        <div class="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">
+                            <i class="fas fa-calendar-alt"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold">近期</h3>
+                        <p class="text-green-300">1-3个月</p>
+                    </div>
+                    <ul class="space-y-4">
+                        <li class="flex items-start gap-3">
+                            <span class="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center text-sm flex-shrink-0">1</span>
+                            <span>用户配额管理功能</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <span class="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center text-sm flex-shrink-0">2</span>
+                            <span>作业提交向导</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <span class="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center text-sm flex-shrink-0">3</span>
+                            <span>告警通知（邮件/钉钉）</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <div class="card bg-gradient-to-b from-white/10 to-white/5">
+                    <div class="text-center mb-6">
+                        <div class="w-20 h-20 bg-blue-500 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">
+                            <i class="fas fa-calendar-check"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold">中期</h3>
+                        <p class="text-blue-300">3-6个月</p>
+                    </div>
+                    <ul class="space-y-4">
+                        <li class="flex items-start gap-3">
+                            <span class="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-sm flex-shrink-0">1</span>
+                            <span>集群计费系统</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <span class="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-sm flex-shrink-0">2</span>
+                            <span>多集群统一管理</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <span class="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-sm flex-shrink-0">3</span>
+                            <span>自定义仪表盘</span>
+                        </li>
+                    </ul>
+                </div>
+                
+                <div class="card bg-gradient-to-b from-white/10 to-white/5">
+                    <div class="text-center mb-6">
+                        <div class="w-20 h-20 bg-purple-500 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">
+                            <i class="fas fa-rocket"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold">远期</h3>
+                        <p class="text-purple-300">6-12个月</p>
+                    </div>
+                    <ul class="space-y-4">
+                        <li class="flex items-start gap-3">
+                            <span class="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center text-sm flex-shrink-0">1</span>
+                            <span>AI 智能调度建议</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <span class="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center text-sm flex-shrink-0">2</span>
+                            <span>资源使用预测</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <span class="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center text-sm flex-shrink-0">3</span>
+                            <span>移动端 App</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="mt-8 text-center">
+                <div class="inline-block card bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border-2 border-yellow-400">
+                    <p class="text-2xl font-bold">
+                        <i class="fas fa-star text-yellow-400 mr-3"></i>
+                        愿景：打造国内领先的 Slurm 集群管理解决方案
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">11 / 12</div>
+    </div>
+
+    <!-- Slide 12: 总结 -->
+    <div class="slide" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #7e22ce 100%);">
+        <div class="slide-content flex flex-col justify-center items-center text-center">
+            <div class="mb-8">
+                <i class="fas fa-check-circle text-8xl mb-6 text-green-400"></i>
+            </div>
+            
+            <h2 class="text-5xl font-black mb-8">项目成果总结</h2>
+            
+            <div class="grid grid-cols-4 gap-6 mb-12 w-full max-w-4xl">
+                <div class="card bg-white/10">
+                    <i class="fas fa-tachometer-alt text-4xl mb-3 text-blue-300"></i>
+                    <p class="font-bold text-lg">实时监控平台</p>
+                    <p class="text-sm opacity-70">集群状态一目了然</p>
+                </div>
+                <div class="card bg-white/10">
+                    <i class="fas fa-chart-bar text-4xl mb-3 text-green-300"></i>
+                    <p class="font-bold text-lg">统计分析系统</p>
+                    <p class="text-sm opacity-70">用户资源精准统计</p>
+                </div>
+                <div class="card bg-white/10">
+                    <i class="fas fa-tasks text-4xl mb-3 text-yellow-300"></i>
+                    <p class="font-bold text-lg">作业管理工具</p>
+                    <p class="text-sm opacity-70">批量操作高效便捷</p>
+                </div>
+                <div class="card bg-white/10">
+                    <i class="fas fa-terminal text-4xl mb-3 text-purple-300"></i>
+                    <p class="font-bold text-lg">WebShell 终端</p>
+                    <p class="text-sm opacity-70">浏览器直接访问</p>
+                </div>
+            </div>
+            
+            <div class="mb-8">
+                <p class="text-3xl font-bold mb-4">管理效率提升 <span class="text-yellow-400 text-5xl">10-30 倍</span></p>
+                <p class="text-xl opacity-80">集群管理从"黑盒"走向"透明化"</p>
+            </div>
+            
+            <div class="border-t border-white/30 pt-8 w-full max-w-2xl">
+                <p class="text-2xl mb-4">感谢各位领导聆听！</p>
+                <p class="text-lg opacity-70">
+                    <i class="fas fa-envelope mr-2"></i>联系邮箱：[您的邮箱]
+                    <span class="mx-4">|</span>
+                    <i class="fas fa-globe mr-2"></i>系统地址：http://服务器IP:5000
+                </p>
+            </div>
+        </div>
+        <div class="slide-number">12 / 12</div>
+    </div>
+
+    <!-- 打印/PDF 提示 -->
+    <div class="fixed bottom-4 right-4 bg-white rounded-lg shadow-lg p-4 print:hidden">
+        <p class="text-sm text-gray-600 mb-2"><i class="fas fa-info-circle mr-2"></i>操作提示</p>
+        <div class="space-x-2">
+            <button onclick="window.print()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+                <i class="fas fa-print mr-2"></i>打印 / PDF
+            </button>
+        </div>
+        <p class="text-xs text-gray-400 mt-2">建议：使用 Chrome 浏览器打印，选择"另存为 PDF"</p>
+    </div>
+
+</body>
+</html>

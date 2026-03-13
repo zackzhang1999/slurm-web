@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QOS 管理 - Slurm 集群监控系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #3b82f6;
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --bg-hover: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border: #334155;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+        }
+        
+        .app-container { background: var(--bg-dark); }
+        .sidebar {
+            background: var(--bg-card);
+            border-right: 1px solid var(--border);
+        }
+        
+        /* Card Design */
+        .qos-card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .qos-card:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 20px 40px rgba(99, 102, 241, 0.1);
+        }
+        
+        .qos-card-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .qos-card-title {
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .qos-card-body { padding: 24px; }
+        
+        /* QOS Badge */
+        .qos-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .qos-normal { background: linear-gradient(135deg, #64748b, #475569); color: white; }
+        .qos-high { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; }
+        .qos-low { background: linear-gradient(135deg, #10b981, #059669); color: white; }
+        .qos-debug { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
+        .qos-standby { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; }
+        
+        /* Priority Indicator */
+        .priority-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 12px;
+        }
+        
+        .priority-track {
+            flex: 1;
+            height: 6px;
+            background: var(--bg-hover);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .priority-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+        
+        .priority-value {
+            font-size: 14px;
+            font-weight: 600;
+            min-width: 40px;
+            text-align: right;
+        }
+        
+        /* Limits Grid */
+        .limits-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-top: 16px;
+        }
+        
+        .limit-box {
+            background: var(--bg-dark);
+            border-radius: 10px;
+            padding: 12px;
+            border: 1px solid var(--border);
+        }
+        
+        .limit-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+        
+        .limit-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        /* Flags */
+        .flags-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 12px;
+        }
+        
+        .flag-tag {
+            background: var(--bg-hover);
+            color: var(--text-secondary);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        
+        /* Grid Layout */
+        .qos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            gap: 20px;
+        }
+        
+        /* Buttons */
+        .btn-modern {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-modern-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+        }
+        
+        .btn-modern-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3);
+        }
+        
+        .btn-modern-secondary {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        
+        .btn-modern-sm {
+            padding: 6px 14px;
+            font-size: 12px;
+        }
+        
+        /* Modal */
+        .modal-modern {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-modern.active { display: flex; }
+        
+        .modal-content-modern {
+            background: var(--bg-card);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: modalSlide 0.3s ease;
+        }
+        
+        @keyframes modalSlide {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .modal-header-modern {
+            padding: 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .modal-body-modern { padding: 24px; }
+        
+        .modal-close {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+        
+        .modal-close:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        
+        /* Form */
+        .form-group-modern {
+            margin-bottom: 20px;
+        }
+        
+        .form-group-modern label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+        
+        .form-group-modern input,
+        .form-group-modern select {
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .form-group-modern input:focus,
+        .form-group-modern select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        
+        .form-row-modern {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        
+        .help-text-modern {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 6px;
+        }
+        
+        /* Tabs */
+        .tabs-modern {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            background: var(--bg-card);
+            padding: 6px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+        
+        .tab-modern {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-secondary);
+        }
+        
+        .tab-modern:hover { color: var(--text-primary); }
+        .tab-modern.active {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .tab-content-modern { display: none; }
+        .tab-content-modern.active { display: block; }
+        
+        /* Loading */
+        .loading-modern {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 60px;
+            color: var(--text-secondary);
+        }
+        
+        .spinner-modern {
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 12px;
+        }
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* Empty State */
+        .empty-modern {
+            text-align: center;
+            padding: 60px;
+            color: var(--text-secondary);
+        }
+        
+        .empty-icon-modern {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+        
+        /* Info Section */
+        .info-section {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid var(--border);
+        }
+        
+        .info-section h4 {
+            color: var(--text-primary);
+            margin-bottom: 12px;
+            font-size: 16px;
+        }
+        
+        .info-section p {
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 16px;
+        }
+        
+        .info-section ul {
+            color: var(--text-secondary);
+            padding-left: 20px;
+            line-height: 1.8;
+        }
+        
+        .example-box {
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px;
+            font-family: 'Fira Code', monospace;
+            font-size: 13px;
+            color: var(--text-primary);
+            margin: 12px 0;
+        }
+        
+        .example-box strong {
+            color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="logo">
+                <span>🖥️</span>
+                <span>Slurm Monitor</span>
+            </div>
+            <ul class="nav-menu">
+                <li class="nav-item" onclick="location.href='/'">
+                    <span>📊</span>
+                    <span>仪表盘</span>
+                </li>
+                <li class="nav-item" onclick="location.href='/resource-quotas'">
+                    <span>🔧</span>
+                    <span>资源配额</span>
+                </li>
+                <li class="nav-item active" data-page="qos">
+                    <span>⚡</span>
+                    <span>QOS管理</span>
+                </li>
+                <li class="nav-item" onclick="location.href='/accounts'">
+                    <span>👥</span>
+                    <span>账户管理</span>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1>QOS 管理</h1>
+                </div>
+                <div class="top-actions">
+                    <button class="btn-modern btn-modern-primary" onclick="openModal()">
+                        <span>➕</span> 新建 QOS
+                    </button>
+                    <button class="btn-modern btn-modern-secondary" onclick="location.href='/'">
+                        <span>🏠</span> 返回首页
+                    </button>
+                </div>
+            </header>
+
+            <!-- Tabs -->
+            <div class="tabs-modern">
+                <div class="tab-modern active" onclick="switchTab('list')">QOS 列表</div>
+                <div class="tab-modern" onclick="switchTab('help')">使用帮助</div>
+            </div>
+
+            <!-- QOS List Tab -->
+            <div id="tab-list" class="tab-content-modern active">
+                <div id="loading" class="loading-modern">
+                    <div class="spinner-modern"></div>
+                    加载中...
+                </div>
+                <div id="content" style="display:none;">
+                    <div id="qos-grid" class="qos-grid"></div>
+                </div>
+            </div>
+
+            <!-- Help Tab -->
+            <div id="tab-help" class="tab-content-modern">
+                <div class="info-section">
+                    <h4>📚 什么是 QOS?</h4>
+                    <p>Quality of Service (QOS) 是 Slurm 中用于控制作业优先级和资源访问策略的机制。每个作业可以指定一个 QOS，从而获得相应的调度优先级和资源限制。</p>
+                    
+                    <h4>🎯 主要功能</h4>
+                    <ul>
+                        <li><strong>优先级 (Priority):</strong> 影响作业在多因子优先级计算中的权重</li>
+                        <li><strong>抢占 (Preemption):</strong> 高优先级 QOS 可以抢占低优先级 QOS 的作业</li>
+                        <li><strong>资源限制:</strong> 设置 CPU、内存、时间等资源的使用限制</li>
+                        <li><strong>使用因子 (UsageFactor):</strong> 调整资源使用量的计算权重</li>
+                    </ul>
+
+                    <h4>💡 常用 QOS 类型</h4>
+                    <div class="example-box">
+                        <strong>normal</strong>  - 默认 QOS，无特殊限制<br>
+                        <strong>high</strong>    - 高优先级，用于紧急作业<br>
+                        <strong>debug</strong>   - 调试 QOS，资源限制较低<br>
+                        <strong>standby</strong> - 备用 QOS，可被抢占
+                    </div>
+
+                    <h4>📝 命令行使用</h4>
+                    <div class="example-box">
+                        # 提交作业时指定 QOS<br>
+                        sbatch --qos=high myjob.sh<br><br>
+                        # 查看可用的 QOS<br>
+                        sacctmgr show qos<br><br>
+                        # 查看当前作业的 QOS<br>
+                        squeue -o "%i %q"
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Create/Edit Modal -->
+    <div id="modal" class="modal-modern">
+        <div class="modal-content-modern">
+            <div class="modal-header-modern">
+                <h3 id="modal-title">新建 QOS</h3>
+                <div class="modal-close" onclick="closeModal()">✕</div>
+            </div>
+            <div class="modal-body-modern">
+                <form id="qos-form">
+                    <input type="hidden" id="edit-mode" value="false">
+                    <input type="hidden" id="original-name" value="">
+                    
+                    <div class="form-group-modern">
+                        <label>QOS 名称 *</label>
+                        <input type="text" id="qos-name" required placeholder="例如: high, debug, standby">
+                    </div>
+                    
+                    <div class="form-row-modern">
+                        <div class="form-group-modern">
+                            <label>优先级</label>
+                            <input type="number" id="qos-priority" value="0" placeholder="0">
+                            <div class="help-text-modern">数值越高优先级越高</div>
+                        </div>
+                        <div class="form-group-modern">
+                            <label>抢占宽限时间 (秒)</label>
+                            <input type="number" id="qos-grace" value="0" placeholder="0">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group-modern">
+                        <label>资源配额 (GrpTRES)</label>
+                        <input type="text" id="qos-grptres" placeholder="例如: cpu=100,mem=500G">
+                    </div>
+                    
+                    <div class="form-group-modern">
+                        <label>每作业最大资源 (MaxTRES)</label>
+                        <input type="text" id="qos-maxtres" placeholder="例如: cpu=24,gpu=4">
+                    </div>
+                    
+                    <div class="form-row-modern">
+                        <div class="form-group-modern">
+                            <label>最大墙钟时间 (MaxWall)</label>
+                            <input type="text" id="qos-maxwall" placeholder="例如: 24:00:00">
+                        </div>
+                        <div class="form-group-modern">
+                            <label>使用因子 (UsageFactor)</label>
+                            <input type="number" id="qos-usagefactor" value="1" step="0.1">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group-modern">
+                        <label>可抢占的 QOS</label>
+                        <input type="text" id="qos-preempt" placeholder="例如: normal,standby">
+                    </div>
+                    
+                    <div class="form-group-modern">
+                        <label>标志 (Flags)</label>
+                        <select id="qos-flags" multiple style="height:100px;">
+                            <option value="DenyOnLimit">DenyOnLimit - 超限拒绝提交</option>
+                            <option value="NoReserve">NoReserve - 不预留资源</option>
+                            <option value="OverPartQOS">OverPartQOS - 覆盖分区限制</option>
+                            <option value="RequiresReservation">RequiresReservation - 需要预留</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group-modern">
+                        <label>管理员密码</label>
+                        <input type="password" id="admin-password" required placeholder="输入管理员密码">
+                    </div>
+                    
+                    <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:24px;">
+                        <button type="button" class="btn-modern btn-modern-secondary" onclick="closeModal()">取消</button>
+                        <button type="submit" class="btn-modern btn-modern-primary">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let qosList = [];
+
+        async function loadQOS() {
+            try {
+                const response = await fetch('/api/qos');
+                qosList = await response.json();
+                renderQOSList();
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('content').style.display = 'block';
+            } catch (error) {
+                document.getElementById('loading').textContent = '加载失败';
+            }
+        }
+
+        function renderQOSList() {
+            const grid = document.getElementById('qos-grid');
+            grid.innerHTML = '';
+            
+            if (qosList.length === 0) {
+                grid.innerHTML = '<div class="empty-modern"><div class="empty-icon-modern">📭</div>暂无 QOS 配置</div>';
+                return;
+            }
+            
+            qosList.forEach(qos => {
+                const priorityPercent = Math.min(100, Math.max(0, (parseInt(qos.priority) + 100) / 200 * 100));
+                const priorityColor = qos.priority > 0 ? 'bg-red-500' : qos.priority < 0 ? 'bg-green-500' : 'bg-gray-500';
+                
+                const card = document.createElement('div');
+                card.className = 'qos-card';
+                
+                let badgeClass = 'qos-normal';
+                if (qos.priority > 0) badgeClass = 'qos-high';
+                else if (qos.priority < 0) badgeClass = 'qos-low';
+                if (qos.name.includes('debug')) badgeClass = 'qos-debug';
+                if (qos.name.includes('standby')) badgeClass = 'qos-standby';
+                
+                const flags = qos.flags ? qos.flags.split(',').filter(f => f).map(f => 
+                    `<span class="flag-tag">${f.trim()}</span>`
+                ).join('') : '';
+                
+                card.innerHTML = `
+                    <div class="qos-card-header">
+                        <div class="qos-card-title">
+                            <span class="qos-badge ${badgeClass}">${qos.name}</span>
+                        </div>
+                        <div>
+                            <button class="btn-modern btn-modern-sm btn-modern-secondary" onclick="editQOS('${qos.name}')">编辑</button>
+                            <button class="btn-modern btn-modern-sm" style="background:var(--danger);color:white;margin-left:8px;" onclick="deleteQOS('${qos.name}')">删除</button>
+                        </div>
+                    </div>
+                    <div class="qos-card-body">
+                        <div class="priority-bar">
+                            <div class="priority-track">
+                                <div class="priority-fill" style="width:${priorityPercent}%; background: ${qos.priority > 0 ? '#ef4444' : qos.priority < 0 ? '#10b981' : '#64748b'};"></div>
+                            </div>
+                            <div class="priority-value">${qos.priority}</div>
+                        </div>
+                        
+                        <div class="limits-grid">
+                            <div class="limit-box">
+                                <div class="limit-label">资源配额</div>
+                                <div class="limit-value">${qos.grp_tres !== 'N/A' ? qos.grp_tres : '无限制'}</div>
+                            </div>
+                            <div class="limit-box">
+                                <div class="limit-label">单任务最大资源</div>
+                                <div class="limit-value">${qos.max_tres !== 'N/A' ? qos.max_tres : '无限制'}</div>
+                            </div>
+                            <div class="limit-box">
+                                <div class="limit-label">最大运行时间</div>
+                                <div class="limit-value">${qos.max_wall !== 'N/A' ? qos.max_wall : '无限制'}</div>
+                            </div>
+                            <div class="limit-box">
+                                <div class="limit-label">抢占</div>
+                                <div class="limit-value">${qos.preempt || '无'}</div>
+                            </div>
+                        </div>
+                        
+                        ${flags ? `<div class="flags-list">${flags}</div>` : ''}
+                    </div>
+                `;
+                
+                grid.appendChild(card);
+            });
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-modern').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content-modern').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById(`tab-${tab}`).classList.add('active');
+        }
+
+        function openModal() {
+            document.getElementById('modal').classList.add('active');
+            document.getElementById('modal-title').textContent = '新建 QOS';
+            document.getElementById('edit-mode').value = 'false';
+            document.getElementById('qos-name').value = '';
+            document.getElementById('qos-name').disabled = false;
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.remove('active');
+        }
+
+        async function editQOS(name) {
+            const qos = qosList.find(q => q.name === name);
+            if (!qos) return;
+            
+            document.getElementById('modal').classList.add('active');
+            document.getElementById('modal-title').textContent = '编辑 QOS';
+            document.getElementById('edit-mode').value = 'true';
+            document.getElementById('original-name').value = name;
+            document.getElementById('qos-name').value = name;
+            document.getElementById('qos-name').disabled = true;
+            document.getElementById('qos-priority').value = qos.priority;
+            document.getElementById('qos-grace').value = qos.grace_time || '0';
+            document.getElementById('qos-preempt').value = qos.preempt || '';
+        }
+
+        async function deleteQOS(name) {
+            if (!confirm(`确定删除 QOS "${name}"?`)) return;
+            const password = prompt('请输入管理员密码:');
+            if (!password) return;
+            
+            try {
+                const response = await fetch(`/api/qos/${name}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    alert('删除成功');
+                    loadQOS();
+                } else {
+                    alert('删除失败: ' + result.message);
+                }
+            } catch (error) {
+                alert('删除失败');
+            }
+        }
+
+        document.getElementById('qos-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const editMode = document.getElementById('edit-mode').value === 'true';
+            const name = editMode ? document.getElementById('original-name').value : document.getElementById('qos-name').value;
+            
+            const data = {
+                name: document.getElementById('qos-name').value,
+                priority: document.getElementById('qos-priority').value,
+                gracetime: document.getElementById('qos-grace').value,
+                grptres: document.getElementById('qos-grptres').value,
+                maxtres: document.getElementById('qos-maxtres').value,
+                maxwall: document.getElementById('qos-maxwall').value,
+                usagefactor: document.getElementById('qos-usagefactor').value,
+                preempt: document.getElementById('qos-preempt').value,
+                flags: Array.from(document.getElementById('qos-flags').selectedOptions).map(o => o.value).join(','),
+                password: document.getElementById('admin-password').value
+            };
+            
+            try {
+                const response = await fetch(editMode ? `/api/qos/${name}` : '/api/qos', {
+                    method: editMode ? 'PUT' : 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                if (result.success) {
+                    alert(editMode ? '修改成功' : '创建成功');
+                    closeModal();
+                    loadQOS();
+                } else {
+                    alert('操作失败: ' + result.message);
+                }
+            } catch (error) {
+                alert('操作失败');
+            }
+        });
+
+        document.getElementById('modal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('modal')) closeModal();
+        });
+
+        document.addEventListener('DOMContentLoaded', loadQOS);
+    </script>
+</body>
+</html>

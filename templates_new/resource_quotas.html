@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>资源配额管理 - Slurm 集群监控系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #3b82f6;
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --bg-hover: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border: #334155;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+        }
+        
+        .app-container {
+            background: var(--bg-dark);
+        }
+        
+        .sidebar {
+            background: var(--bg-card);
+            border-right: 1px solid var(--border);
+        }
+        
+        /* Modern Card Design */
+        .rq-card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .rq-card:hover {
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 20px 40px rgba(99, 102, 241, 0.1);
+        }
+        
+        .rq-card-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .rq-card-title {
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .rq-card-body {
+            padding: 24px;
+        }
+        
+        /* Entity Badge */
+        .entity-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .entity-qos {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+            color: white;
+        }
+        
+        .entity-account {
+            background: linear-gradient(135deg, #06b6d4, #0891b2);
+            color: white;
+        }
+        
+        .entity-user {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+        
+        /* Quota Item */
+        .quota-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .quota-item:last-child {
+            border-bottom: none;
+        }
+        
+        .quota-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            margin-right: 16px;
+        }
+        
+        .quota-cpu { background: rgba(239, 68, 68, 0.2); }
+        .quota-mem { background: rgba(59, 130, 246, 0.2); }
+        .quota-gpu { background: rgba(16, 185, 129, 0.2); }
+        .quota-time { background: rgba(245, 158, 11, 0.2); }
+        
+        .quota-info {
+            flex: 1;
+        }
+        
+        .quota-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 2px;
+        }
+        
+        .quota-value {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .quota-limit {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+        
+        .stat-card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+        
+        .stat-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+            font-size: 24px;
+        }
+        
+        .stat-icon.blue { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+        .stat-icon.green { background: linear-gradient(135deg, #10b981, #059669); }
+        .stat-icon.purple { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+        .stat-icon.orange { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+        
+        /* Table Styles */
+        .rq-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+        
+        .rq-table th {
+            text-align: left;
+            padding: 16px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .rq-table td {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+            font-size: 14px;
+        }
+        
+        .rq-table tr:hover td {
+            background: var(--bg-hover);
+        }
+        
+        .rq-table tr:last-child td {
+            border-bottom: none;
+        }
+        
+        /* Button Styles */
+        .rq-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .rq-btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+        }
+        
+        .rq-btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3);
+        }
+        
+        .rq-btn-secondary {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        
+        .rq-btn-secondary:hover {
+            background: var(--border);
+        }
+        
+        .rq-btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+        
+        /* Modal Styles */
+        .rq-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .rq-modal.active {
+            display: flex;
+        }
+        
+        .rq-modal-content {
+            background: var(--bg-card);
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: modalSlide 0.3s ease;
+        }
+        
+        @keyframes modalSlide {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .rq-modal-header {
+            padding: 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .rq-modal-body {
+            padding: 24px;
+        }
+        
+        .rq-close {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+        
+        .rq-close:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        
+        /* Form Styles */
+        .rq-form-group {
+            margin-bottom: 20px;
+        }
+        
+        .rq-form-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+        
+        .rq-form-group input,
+        .rq-form-group select {
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .rq-form-group input:focus,
+        .rq-form-group select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        
+        .rq-form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        
+        .rq-help-text {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 6px;
+        }
+        
+        /* Tabs */
+        .rq-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            background: var(--bg-card);
+            padding: 6px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+        
+        .rq-tab {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-secondary);
+        }
+        
+        .rq-tab:hover {
+            color: var(--text-primary);
+        }
+        
+        .rq-tab.active {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .rq-tab-content {
+            display: none;
+        }
+        
+        .rq-tab-content.active {
+            display: block;
+        }
+        
+        /* Progress Bar */
+        .rq-progress {
+            height: 6px;
+            background: var(--bg-hover);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        
+        .rq-progress-bar {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+        
+        .rq-progress-bar.blue { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+        .rq-progress-bar.green { background: linear-gradient(90deg, #10b981, #34d399); }
+        .rq-progress-bar.orange { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+        .rq-progress-bar.red { background: linear-gradient(90deg, #ef4444, #f87171); }
+        
+        /* Empty State */
+        .rq-empty {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+        
+        .rq-empty-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+        
+        /* Loading */
+        .rq-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 60px;
+            color: var(--text-secondary);
+        }
+        
+        .rq-spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 12px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Action Menu */
+        .rq-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .rq-action-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+        
+        .rq-action-btn:hover {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+        }
+        
+        .rq-action-btn.edit:hover { color: var(--info); }
+        .rq-action-btn.delete:hover { color: var(--danger); }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="logo">
+                <span>🖥️</span>
+                <span>Slurm Monitor</span>
+            </div>
+            <ul class="nav-menu">
+                <li class="nav-item" onclick="location.href='/'">
+                    <span>📊</span>
+                    <span>仪表盘</span>
+                </li>
+                <li class="nav-item active" data-page="resource-quotas">
+                    <span>🔧</span>
+                    <span>资源配额</span>
+                </li>
+                <li class="nav-item" onclick="location.href='/qos'">
+                    <span>⚡</span>
+                    <span>QOS管理</span>
+                </li>
+                <li class="nav-item" onclick="location.href='/accounts'">
+                    <span>👥</span>
+                    <span>账户管理</span>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Bar -->
+            <header class="top-bar">
+                <div class="page-title">
+                    <h1>资源配额管理</h1>
+                </div>
+                <div class="top-actions">
+                    <button class="rq-btn rq-btn-primary" onclick="openQuotaModal()">
+                        <span>➕</span> 设置配额
+                    </button>
+                    <button class="rq-btn rq-btn-secondary" onclick="location.href='/'">
+                        <span>🏠</span> 返回首页
+                    </button>
+                </div>
+            </header>
+
+            <!-- Stats Grid -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon blue">📊</div>
+                    <div class="stat-value" id="stat-quotas">-</div>
+                    <div class="stat-label">配额规则</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon green">👤</div>
+                    <div class="stat-value" id="stat-users">-</div>
+                    <div class="stat-label">受限用户</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon purple">📁</div>
+                    <div class="stat-value" id="stat-accounts">-</div>
+                    <div class="stat-label">受限账户</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon orange">⚡</div>
+                    <div class="stat-value" id="stat-qos">-</div>
+                    <div class="stat-label">QOS策略</div>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="rq-tabs">
+                <div class="rq-tab active" onclick="switchTab('all')">全部配额</div>
+                <div class="rq-tab" onclick="switchTab('qos')">QOS限制</div>
+                <div class="rq-tab" onclick="switchTab('account')">账户限制</div>
+                <div class="rq-tab" onclick="switchTab('user')">用户限制</div>
+            </div>
+
+            <!-- Content -->
+            <div id="tab-all" class="rq-tab-content active">
+                <div class="rq-card">
+                    <div class="rq-card-header">
+                        <div class="rq-card-title">
+                            <span>📋</span>
+                            资源配额列表
+                        </div>
+                    </div>
+                    <div class="rq-card-body" style="padding: 0;">
+                        <div id="all-loading" class="rq-loading">
+                            <div class="rq-spinner"></div>
+                            加载中...
+                        </div>
+                        <div id="all-content" style="display:none;">
+                            <table class="rq-table">
+                                <thead>
+                                    <tr>
+                                        <th>实体</th>
+                                        <th>集群</th>
+                                        <th>资源配额 (GrpTRES)</th>
+                                        <th>单任务最大资源 (MaxTRES)</th>
+                                        <th>每用户资源配额</th>
+                                        <th>最大时间 (MaxWall)</th>
+                                        <th>公平份额</th>
+                                        <th>最大作业数</th>
+                                        <th>最大提交数</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="all-table"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-qos" class="rq-tab-content">
+                <div class="rq-card">
+                    <div class="rq-card-header">
+                        <div class="rq-card-title">
+                            <span>⚡</span>
+                            QOS 资源限制
+                        </div>
+                    </div>
+                    <div class="rq-card-body" style="padding: 0;">
+                        <div id="qos-loading" class="rq-loading">
+                            <div class="rq-spinner"></div>
+                            加载中...
+                        </div>
+                        <div id="qos-content" style="display:none;">
+                            <table class="rq-table">
+                                <thead>
+                                    <tr>
+                                        <th>QOS名称</th>
+                                        <th>资源配额</th>
+                                        <th>单任务最大资源</th>
+                                        <th>每用户资源配额</th>
+                                        <th>最大运行时间</th>
+                                        <th>优先级</th>
+                                        <th>最大作业数</th>
+                                        <th>最大提交数</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="qos-table"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-account" class="rq-tab-content">
+                <div class="rq-card">
+                    <div class="rq-card-header">
+                        <div class="rq-card-title">
+                            <span>📁</span>
+                            账户资源限制
+                        </div>
+                    </div>
+                    <div class="rq-card-body" style="padding: 0;">
+                        <div id="account-loading" class="rq-loading">
+                            <div class="rq-spinner"></div>
+                            加载中...
+                        </div>
+                        <div id="account-content" style="display:none;">
+                            <table class="rq-table">
+                                <thead>
+                                    <tr>
+                                        <th>账户</th>
+                                        <th>资源配额</th>
+                                        <th>单任务最大资源</th>
+                                        <th>每用户资源配额</th>
+                                        <th>最大运行时间</th>
+                                        <th>最大作业数</th>
+                                        <th>最大提交数</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="account-table"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-user" class="rq-tab-content">
+                <div class="rq-card">
+                    <div class="rq-card-header">
+                        <div class="rq-card-title">
+                            <span>👤</span>
+                            用户资源限制
+                        </div>
+                    </div>
+                    <div class="rq-card-body" style="padding: 0;">
+                        <div id="user-loading" class="rq-loading">
+                            <div class="rq-spinner"></div>
+                            加载中...
+                        </div>
+                        <div id="user-content" style="display:none;">
+                            <table class="rq-table">
+                                <thead>
+                                    <tr>
+                                        <th>用户</th>
+                                        <th>账户</th>
+                                        <th>集群</th>
+                                        <th>资源配额</th>
+                                        <th>单任务最大资源</th>
+                                        <th>最大运行时间</th>
+                                        <th>最大作业数</th>
+                                        <th>最大提交数</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="user-table"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Set Quota Modal -->
+    <div id="quota-modal" class="rq-modal">
+        <div class="rq-modal-content">
+            <div class="rq-modal-header">
+                <h3>设置资源配额</h3>
+                <div class="rq-close" onclick="closeQuotaModal()">✕</div>
+            </div>
+            <div class="rq-modal-body">
+                <form id="quota-form">
+                    <div class="rq-form-group">
+                        <label>实体类型</label>
+                        <select id="q-entity-type" required onchange="onEntityTypeChange()">
+                            <option value="">选择类型</option>
+                            <option value="qos">QOS</option>
+                            <option value="account">账户</option>
+                            <option value="user">用户</option>
+                        </select>
+                    </div>
+                    
+                    <div class="rq-form-group" id="q-entity-name-group">
+                        <label>实体名称</label>
+                        <input type="text" id="q-entity-name" required placeholder="例如: high, science, username">
+                    </div>
+                    
+                    <div class="rq-form-group" id="q-account-group" style="display:none;">
+                        <label>关联账户 (仅用户需要)</label>
+                        <input type="text" id="q-account" placeholder="账户名称">
+                    </div>
+                    
+                    <div class="rq-form-group" id="q-cluster-group">
+                        <label>集群 (可选)</label>
+                        <input type="text" id="q-cluster" placeholder="默认所有集群">
+                    </div>
+                    
+                    <div class="rq-form-row">
+                        <div class="rq-form-group">
+                            <label>资源配额 (GrpTRES)</label>
+                            <input type="text" id="q-grp-tres" placeholder="cpu=100,mem=500G">
+                            <div class="rq-help-text">资源配额</div>
+                        </div>
+                        <div class="rq-form-group">
+                            <label>单任务最大资源 (MaxTRES)</label>
+                            <input type="text" id="q-max-tres" placeholder="cpu=24,gpu=4">
+                            <div class="rq-help-text">单个作业可使用的最大资源</div>
+                        </div>
+                    </div>
+                    
+                    <div class="rq-form-row">
+                        <div class="rq-form-group">
+                            <label>最大运行时间 (MaxWall)</label>
+                            <input type="text" id="q-max-wall" placeholder="例如: 24:00:00">
+                            <div class="rq-help-text">HH:MM:SS 格式</div>
+                        </div>
+                        <div class="rq-form-group">
+                            <label>公平份额 (Fairshare)</label>
+                            <input type="number" id="q-fairshare" placeholder="例如: 100" min="0">
+                            <div class="rq-help-text">优先级计算权重</div>
+                        </div>
+                    </div>
+                    
+                    <div class="rq-form-row">
+                        <div class="rq-form-group">
+                            <label>最大作业数 (MaxJobs)</label>
+                            <input type="number" id="q-max-jobs" placeholder="例如: 10" min="0">
+                        </div>
+                        <div class="rq-form-group">
+                            <label>最大提交数 (MaxSubmit)</label>
+                            <input type="number" id="q-max-submit" placeholder="例如: 50" min="0">
+                        </div>
+                    </div>
+                    
+                    <div class="rq-form-row" id="q-max-tres-per-user-row">
+                        <div class="rq-form-group">
+                            <label>每用户资源配额 (MaxTRESPerUser)</label>
+                            <input type="text" id="q-max-tres-per-user" placeholder="cpu=100,mem=500G">
+                            <div class="rq-help-text">每个用户可使用的最大资源（仅QOS和账户有效）</div>
+                        </div>
+                        <div class="rq-form-group">
+                            <label>优先级 (Priority)</label>
+                            <input type="number" id="q-priority" placeholder="例如: 100" min="0">
+                            <div class="rq-help-text">QOS优先级（仅QOS有效）</div>
+                        </div>
+                    </div>
+                    
+                    <div class="rq-form-group">
+                        <label>管理员密码</label>
+                        <input type="password" id="q-password" required placeholder="输入管理员密码">
+                    </div>
+                    
+                    <div style="display:flex; gap:12px; justify-content:flex-end; margin-top:24px;">
+                        <button type="button" class="rq-btn rq-btn-secondary" onclick="closeQuotaModal()">取消</button>
+                        <button type="submit" class="rq-btn rq-btn-primary">保存配额</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- TRES Reference Modal -->
+    <div id="tres-modal" class="rq-modal">
+        <div class="rq-modal-content" style="max-width:500px;">
+            <div class="rq-modal-header">
+                <h3>TRES 资源类型参考</h3>
+                <div class="rq-close" onclick="closeTresModal()">✕</div>
+            </div>
+            <div class="rq-modal-body">
+                <div id="tres-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allQuotas = [];
+        let qosLimits = [];
+        let tresTypes = [];
+
+        // Load all data
+        async function loadData() {
+            await Promise.all([
+                loadQuotas(),
+                loadQosLimits(),
+                loadTresTypes()
+            ]);
+        }
+
+        // Load quotas
+        async function loadQuotas() {
+            try {
+                const response = await fetch('/api/resource-quotas');
+                allQuotas = await response.json();
+                
+                // Update stats
+                const userQuotas = allQuotas.filter(q => q.user && q.user !== '(account)');
+                const accountQuotas = allQuotas.filter(q => q.user === '(account)');
+                
+                document.getElementById('stat-quotas').textContent = allQuotas.length;
+                document.getElementById('stat-users').textContent = [...new Set(userQuotas.map(q => q.user))].length;
+                document.getElementById('stat-accounts').textContent = [...new Set(accountQuotas.map(q => q.account))].length;
+                
+                renderAllTable();
+                renderAccountTable();
+                renderUserTable();
+            } catch (error) {
+                console.error('Error loading quotas:', error);
+            }
+        }
+
+        // Load QOS limits
+        async function loadQosLimits() {
+            try {
+                const response = await fetch('/api/resource-quotas/qos-limits');
+                qosLimits = await response.json();
+                
+                document.getElementById('stat-qos').textContent = qosLimits.length;
+                
+                renderQosTable();
+            } catch (error) {
+                console.error('Error loading QOS limits:', error);
+            }
+        }
+
+        // Load TRES types
+        async function loadTresTypes() {
+            try {
+                const response = await fetch('/api/resource-quotas/tres-types');
+                tresTypes = await response.json();
+            } catch (error) {
+                console.error('Error loading TRES types:', error);
+            }
+        }
+
+        // Render tables
+        function renderAllTable() {
+            const tbody = document.getElementById('all-table');
+            tbody.innerHTML = '';
+            
+            if (allQuotas.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" class="rq-empty"><div class="rq-empty-icon">📭</div>暂无配额数据</td></tr>';
+            } else {
+                allQuotas.forEach(q => {
+                    const isAccount = q.user === '(account)';
+                    const entityType = isAccount ? 'account' : 'user';
+                    const entityName = isAccount ? q.account : q.user;
+                    
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>
+                            <span class="entity-badge entity-${entityType}">${entityType.toUpperCase()}</span>
+                            <strong style="margin-left:8px;">${entityName}</strong>
+                        </td>
+                        <td>${q.cluster}</td>
+                        <td><code>${q.grp_tres}</code></td>
+                        <td><code>${q.max_tres}</code></td>
+                        <td><code>${q.max_tres_per_user}</code></td>
+                        <td>${q.max_wall}</td>
+                        <td>${q.fairshare}</td>
+                        <td>${q.max_jobs}</td>
+                        <td>${q.max_submit}</td>
+                        <td>
+                            <div class="rq-actions">
+                                <button class="rq-action-btn edit" onclick="editQuota('${entityType}', '${entityName}')" title="编辑">✏️</button>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+            
+            document.getElementById('all-loading').style.display = 'none';
+            document.getElementById('all-content').style.display = 'block';
+        }
+
+        function renderQosTable() {
+            const tbody = document.getElementById('qos-table');
+            tbody.innerHTML = '';
+            
+            if (qosLimits.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="rq-empty">暂无QOS数据</td></tr>';
+            } else {
+                qosLimits.forEach(q => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>
+                            <span class="entity-badge entity-qos">QOS</span>
+                            <strong style="margin-left:8px;">${q.name}</strong>
+                        </td>
+                        <td><code>${q.grp_tres}</code></td>
+                        <td><code>${q.max_tres}</code></td>
+                        <td><code>${q.max_tres_per_user}</code></td>
+                        <td>${q.max_wall}</td>
+                        <td>${q.priority}</td>
+                        <td>${q.max_jobs}</td>
+                        <td>${q.max_submit}</td>
+                        <td>
+                            <div class="rq-actions">
+                                <button class="rq-action-btn edit" onclick="editQuota('qos', '${q.name}')" title="编辑">✏️</button>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+            
+            document.getElementById('qos-loading').style.display = 'none';
+            document.getElementById('qos-content').style.display = 'block';
+        }
+
+        function renderAccountTable() {
+            const tbody = document.getElementById('account-table');
+            tbody.innerHTML = '';
+            
+            const accounts = allQuotas.filter(q => q.user === '(account)');
+            
+            if (accounts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="rq-empty">暂无账户配额数据</td></tr>';
+            } else {
+                accounts.forEach(q => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>
+                            <span class="entity-badge entity-account">ACCOUNT</span>
+                            <strong style="margin-left:8px;">${q.account}</strong>
+                        </td>
+                        <td><code>${q.grp_tres}</code></td>
+                        <td><code>${q.max_tres}</code></td>
+                        <td><code>${q.max_tres_per_user}</code></td>
+                        <td>${q.max_wall}</td>
+                        <td>${q.max_jobs}</td>
+                        <td>${q.max_submit}</td>
+                        <td>
+                            <div class="rq-actions">
+                                <button class="rq-action-btn edit" onclick="editQuota('account', '${q.account}')" title="编辑">✏️</button>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+            
+            document.getElementById('account-loading').style.display = 'none';
+            document.getElementById('account-content').style.display = 'block';
+        }
+
+        function renderUserTable() {
+            const tbody = document.getElementById('user-table');
+            tbody.innerHTML = '';
+            
+            const users = allQuotas.filter(q => q.user && q.user !== '(account)');
+            
+            if (users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="rq-empty">暂无用户配额数据</td></tr>';
+            } else {
+                users.forEach(q => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>
+                            <span class="entity-badge entity-user">USER</span>
+                            <strong style="margin-left:8px;">${q.user}</strong>
+                        </td>
+                        <td>${q.account}</td>
+                        <td>${q.cluster}</td>
+                        <td><code>${q.grp_tres}</code></td>
+                        <td><code>${q.max_tres}</code></td>
+                        <td>${q.max_wall}</td>
+                        <td>${q.max_jobs}</td>
+                        <td>${q.max_submit}</td>
+                        <td>
+                            <div class="rq-actions">
+                                <button class="rq-action-btn edit" onclick="editQuota('user', '${q.user}')" title="编辑">✏️</button>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+            
+            document.getElementById('user-loading').style.display = 'none';
+            document.getElementById('user-content').style.display = 'block';
+        }
+
+        // Tab switching
+        function switchTab(tab) {
+            document.querySelectorAll('.rq-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.rq-tab-content').forEach(t => t.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(`tab-${tab}`).classList.add('active');
+        }
+
+        // Modal functions
+        function openQuotaModal() {
+            document.getElementById('quota-modal').classList.add('active');
+            document.getElementById('quota-form').reset();
+        }
+
+        function closeQuotaModal() {
+            document.getElementById('quota-modal').classList.remove('active');
+        }
+
+        function openTresModal() {
+            document.getElementById('tres-modal').classList.add('active');
+            renderTresList();
+        }
+
+        function closeTresModal() {
+            document.getElementById('tres-modal').classList.remove('active');
+        }
+
+        function onEntityTypeChange() {
+            const type = document.getElementById('q-entity-type').value;
+            const accountGroup = document.getElementById('q-account-group');
+            const clusterGroup = document.getElementById('q-cluster-group');
+            const maxTresPerUserRow = document.getElementById('q-max-tres-per-user-row');
+            
+            if (type === 'user') {
+                accountGroup.style.display = 'block';
+                clusterGroup.style.display = 'block';
+                maxTresPerUserRow.style.display = 'none';
+            } else if (type === 'account') {
+                accountGroup.style.display = 'none';
+                clusterGroup.style.display = 'none';
+                maxTresPerUserRow.style.display = 'flex';
+            } else {
+                accountGroup.style.display = 'none';
+                clusterGroup.style.display = 'block';
+                maxTresPerUserRow.style.display = 'flex';
+            }
+        }
+
+        function renderTresList() {
+            const container = document.getElementById('tres-list');
+            container.innerHTML = tresTypes.map(t => `
+                <div class="quota-item">
+                    <div class="quota-icon quota-cpu">🔧</div>
+                    <div class="quota-info">
+                        <div class="quota-value">${t.name} <code style="font-size:12px;">(${t.type})</code></div>
+                        <div class="quota-label">示例: ${t.example}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function editQuota(type, name) {
+            openQuotaModal();
+            document.getElementById('q-entity-type').value = type;
+            document.getElementById('q-entity-name').value = name;
+            onEntityTypeChange();
+        }
+
+        // Form submission
+        document.getElementById('quota-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const data = {
+                entity_type: document.getElementById('q-entity-type').value,
+                entity_name: document.getElementById('q-entity-name').value,
+                cluster: document.getElementById('q-cluster').value,
+                account: document.getElementById('q-account').value,
+                grp_tres: document.getElementById('q-grp-tres').value,
+                max_tres: document.getElementById('q-max-tres').value,
+                max_tres_per_user: document.getElementById('q-max-tres-per-user').value,
+                max_wall: document.getElementById('q-max-wall').value,
+                fairshare: document.getElementById('q-fairshare').value,
+                max_jobs: document.getElementById('q-max-jobs').value,
+                max_submit: document.getElementById('q-max-submit').value,
+                priority: document.getElementById('q-priority').value,
+                password: document.getElementById('q-password').value
+            };
+            
+            try {
+                const response = await fetch('/api/resource-quotas/set', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    alert('资源配额设置成功');
+                    closeQuotaModal();
+                    loadData();
+                } else {
+                    alert('设置失败: ' + result.message);
+                }
+            } catch (error) {
+                alert('设置失败');
+            }
+        });
+
+        // Close modals on backdrop click
+        document.querySelectorAll('.rq-modal').forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.remove('active');
+                }
+            });
+        });
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+        });
+    </script>
+</body>
+</html>
