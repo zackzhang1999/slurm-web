@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+
+{% block title %}组织拓扑 - Slurm 集群监控系统{% endblock %}
+{% block page_title %}组织拓扑{% endblock %}
+{% block page_subtitle %}QOS、账户、用户层级关系可视化{% endblock %}
+
+{% block content %}
+<!-- 组织拓扑页面 -->
+<div id="page-topology" class="page-section">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+        <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-slate-800">
+                <i class="fas fa-project-diagram text-primary-500 mr-2"></i>组织拓扑图
+            </h3>
+            <button onclick="loadTopologyData()" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors">
+                <i class="fas fa-sync-alt mr-2"></i>刷新
+            </button>
+        </div>
+        <div class="p-6">
+            <div id="topology-loading" class="flex items-center justify-center py-12 text-slate-500">
+                <div class="spinner mr-3"></div>加载中...
+            </div>
+            <div id="topology-content" class="hidden">
+                <div id="topology-legend" class="flex items-center gap-6 mb-6 text-sm">
+                    <div class="flex items-center">
+                        <div class="w-4 h-4 rounded-full bg-emerald-500 mr-2"></div>
+                        <span>QOS</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-4 h-4 rounded-full bg-blue-500 mr-2"></div>
+                        <span>账户</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-4 h-4 rounded-full bg-purple-500 mr-2"></div>
+                        <span>用户</span>
+                    </div>
+                </div>
+                <div id="topology-container" class="overflow-x-auto"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 检查用户登录状态
+async function checkUserStatus() {
+    try {
+        const response = await fetch('/api/current-user');
+        const data = await response.json();
+        
+        if (!data.logged_in) {
+            window.location.href = '/login';
+            return;
+        }
+        
+        window.currentUserType = data.user_type;
+        window.currentUsername = data.username;
+        
+        const adminElements = document.querySelectorAll('.admin-only');
+        if (data.user_type !== 'admin') {
+            adminElements.forEach(el => el.style.display = 'none');
+        }
+    } catch (e) {
+        console.error('检查用户状态失败:', e);
+    }
+}
+
+// 加载组织拓扑数据
+async function loadTopologyData() {
+    try {
+        document.getElementById('topology-loading').classList.remove('hidden');
+        document.getElementById('topology-content').classList.add('hidden');
+        
+        const response = await fetch('/api/organization-topology');
+        const data = await response.json();
+        
+        renderTopology(data);
+        
+        document.getElementById('topology-loading').classList.add('hidden');
+        document.getElementById('topology-content').classList.remove('hidden');
+    } catch (error) {
+        console.error('Error loading topology:', error);
+        document.getElementById('topology-loading').textContent = '加载失败: ' + error.message;
+    }
+}
+
+// 渲染组织拓扑图
+function renderTopology(data) {
+    const container = document.getElementById('topology-container');
+    container.innerHTML = '';
+    
+    if ((!data.qos || data.qos.length === 0) && 
+        (!data.accounts || data.accounts.length === 0) && 
+        (!data.users || data.users.length === 0)) {
+        container.innerHTML = '<div class="text-center py-12 text-slate-500"><i class="fas fa-project-diagram text-4xl mb-3"></i><p>暂无拓扑数据</p></div>';
+        return;
+    }
+    
+    // 收集所有关联的用户
+    const accountUsersMap = {};
+    data.accounts.forEach(a => {
+        accountUsersMap[a.name] = data.users.filter(u => {
+            return data.links.some(l => l.from === 'account' && l.from_name === a.name && l.to === 'user' && l.to_name === u.name);
+        });
+    });
+    
+    // QOS 关联的账户
+    const qosAccountsMap = {};
+    data.qos.forEach(q => {
+        qosAccountsMap[q.name] = data.accounts.filter(a => {
+            return data.links.some(l => l.from === 'qos' && l.from_name === q.name && l.to === 'account' && l.to_name === a.name);
+        });
+    });
+    
+    // 渲染
+    let html = '<div class="flex flex-col items-center">';
+    
+    // QOS 层
+    if (data.qos && data.qos.length > 0) {
+        html += '<div class="flex flex-wrap justify-center gap-4 mb-6">';
+        data.qos.forEach(q => {
+            const linkedAccounts = qosAccountsMap[q.name] || [];
+            html += renderQOSNode(q, linkedAccounts);
+        });
+        html += '</div>';
+        
+        if (data.accounts && data.accounts.length > 0) {
+            html += '<div class="flex justify-center mb-4"><i class="fas fa-arrow-down text-slate-400 text-xl"></i></div>';
+        }
+    }
+    
+    // 账户层
+    if (data.accounts && data.accounts.length > 0) {
+        html += '<div class="flex flex-wrap justify-center gap-4 mb-6">';
+        data.accounts.forEach(a => {
+            const linkedUsers = accountUsersMap[a.name] || [];
+            html += renderAccountNode(a, linkedUsers);
+        });
+        html += '</div>';
+    }
+    
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+// 渲染 QOS 节点
+function renderQOSNode(q, accounts) {
+    const quotaHtml = formatQuotaInfo(q);
+    
+    let childrenHtml = '';
+    if (accounts.length > 0) {
+        childrenHtml = '<div class="mt-4 pt-3 border-t border-slate-200">';
+        childrenHtml += '<div class="text-xs text-slate-500 mb-2">关联账户:</div>';
+        childrenHtml += '<div class="flex flex-wrap gap-1">';
+        accounts.forEach(a => {
+            childrenHtml += `<span class="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">${escapeHtml(a.name)}</span>`;
+        });
+        childrenHtml += '</div></div>';
+    }
+    
+    return `
+        <div class="bg-white rounded-xl shadow-lg border-2 border-emerald-500 p-5 min-w-[220px] max-w-[280px] relative">
+            <div class="flex items-center gap-3 mb-3">
+                <div class="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-white">
+                    <i class="fas fa-cog"></i>
+                </div>
+                <div>
+                    <div class="text-xs text-emerald-600 font-medium">QOS</div>
+                    <div class="font-bold text-slate-800 text-lg">${escapeHtml(q.name)}</div>
+                </div>
+            </div>
+            ${quotaHtml}
+            ${childrenHtml}
+        </div>
+    `;
+}
+
+// 渲染账户节点
+function renderAccountNode(account, users) {
+    const quotaHtml = formatQuotaInfo(account.quota);
+    
+    let childrenHtml = '';
+    if (users.length > 0) {
+        childrenHtml = '<div class="mt-4 pt-3 border-t border-slate-200">';
+        childrenHtml += '<div class="text-xs text-slate-500 mb-2">用户:</div>';
+        childrenHtml += '<div class="flex flex-wrap gap-1">';
+        users.forEach(u => {
+            childrenHtml += `<span class="px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">${escapeHtml(u.name)}</span>`;
+        });
+        childrenHtml += '</div></div>';
+    }
+    
+    return `
+        <div class="bg-white rounded-xl shadow-lg border-2 border-blue-500 p-5 min-w-[220px] max-w-[280px]">
+            <div class="flex items-center gap-3 mb-3">
+                <div class="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white">
+                    <i class="fas fa-folder"></i>
+                </div>
+                <div>
+                    <div class="text-xs text-blue-600 font-medium">账户</div>
+                    <div class="font-bold text-slate-800 text-lg">${escapeHtml(account.name)}</div>
+                </div>
+            </div>
+            ${quotaHtml}
+            ${childrenHtml}
+        </div>
+    `;
+}
+
+// 格式化配额信息
+function formatQuotaInfo(quota) {
+    if (!quota) return '';
+    
+    let html = '<div class="text-xs space-y-1">';
+    
+    if (quota.grp_tres && quota.grp_tres !== 'N/A') {
+        html += `<div class="flex justify-between"><span class="text-slate-500">组资源:</span><span>${escapeHtml(quota.grp_tres)}</span></div>`;
+    }
+    if (quota.max_tres && quota.max_tres !== 'N/A') {
+        html += `<div class="flex justify-between"><span class="text-slate-500">最大资源:</span><span>${escapeHtml(quota.max_tres)}</span></div>`;
+    }
+    if (quota.max_wall && quota.max_wall !== 'N/A') {
+        html += `<div class="flex justify-between"><span class="text-slate-500">最大时长:</span><span>${escapeHtml(quota.max_wall)}</span></div>`;
+    }
+    if (quota.max_jobs && quota.max_jobs !== 'N/A') {
+        html += `<div class="flex justify-between"><span class="text-slate-500">最大作业:</span><span>${escapeHtml(quota.max_jobs)}</span></div>`;
+    }
+    if (quota.priority) {
+        html += `<div class="flex justify-between"><span class="text-slate-500">优先级:</span><span>${escapeHtml(quota.priority)}</span></div>`;
+    }
+    
+    html += '</div>';
+    return html;
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    checkUserStatus();
+    loadTopologyData();
+});
+</script>
+{% endblock %}

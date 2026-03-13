@@ -1260,6 +1260,11 @@ def accounts_page():
     """Account and user management page"""
     return render_template('accounts.html')
 
+@app.route('/topology')
+def topology_page():
+    """Organization topology page"""
+    return render_template('topology.html')
+
 @app.route('/api/summary')
 def api_summary():
     return jsonify(get_cluster_summary())
