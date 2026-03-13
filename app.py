@@ -2734,15 +2734,14 @@ def api_accounts_tree():
 
 @app.route('/api/organization-topology')
 def api_organization_topology():
-    """Get organization topology: QOS -> Account -> User hierarchy"""
-    assoc_output = run_command(
-        "sacctmgr show assoc format=Cluster,Account,User,Partition,QOS,GrpTRES,MaxTRES,MaxTRESPerUser,MaxWall,Fairshare,MaxJobs,MaxSubmitJobs,DefaultQOS "
-        "--noheader --parsable2 2>/dev/null"
-    )
-    
+    """Get organization topology: QOS -> Account -> User hierarchy using tree format"""
     qos_output = run_command(
         "sacctmgr show qos format=Name,GrpTRES,MaxTRES,MaxTRESPerUser,MaxWall,Priority,MaxJobs,MaxSubmitJobs,Preempt "
         "--noheader --parsable2 2>/dev/null"
+    )
+    
+    tree_output = run_command(
+        "sacctmgr list associations tree format=Account,User,QOS,DefaultQOS 2>/dev/null"
     )
     
     topology = {
@@ -2752,89 +2751,112 @@ def api_organization_topology():
         'links': []
     }
     
-    qos_dict = {}
     if qos_output and not qos_output.startswith("Error"):
         for line in qos_output.strip().split('\n'):
             parts = line.split('|')
-            if len(parts) >= 8:
+            if len(parts) >= 2 and parts[0]:
                 qos_name = parts[0]
-                qos_dict[qos_name] = {
+                topology['qos'].append({
                     'name': qos_name,
-                    'grp_tres': parts[1] if parts[1] else 'N/A',
-                    'max_tres': parts[2] if parts[2] else 'N/A',
-                    'max_tres_per_user': parts[3] if parts[3] else 'N/A',
-                    'max_wall': parts[4] if parts[4] else 'N/A',
-                    'priority': parts[5] if parts[5] else 'N/A',
-                    'max_jobs': parts[6] if parts[6] else 'N/A',
-                    'max_submit': parts[7] if parts[7] else 'N/A',
-                    'preempt': parts[8] if parts[8] else ''
-                }
-                topology['qos'].append(qos_dict[qos_name])
+                    'grp_tres': parts[1] if len(parts) > 1 and parts[1] else 'N/A',
+                    'max_tres': parts[2] if len(parts) > 2 and parts[2] else 'N/A',
+                    'max_wall': parts[4] if len(parts) > 4 and parts[4] else 'N/A',
+                    'priority': parts[5] if len(parts) > 5 and parts[5] else 'N/A',
+                    'max_jobs': parts[6] if len(parts) > 6 and parts[6] else 'N/A'
+                })
     
-    account_quota_map = {}
-    user_quota_map = {}
+    accounts_set = set()
+    users_dict = {}
     
-    if assoc_output and not assoc_output.startswith("Error"):
-        for line in assoc_output.strip().split('\n'):
-            parts = line.split('|')
-            if len(parts) >= 13:
-                cluster = parts[0]
-                account = parts[1]
-                user = parts[2] if parts[2] else ''
-                partition = parts[3] if parts[3] else 'ALL'
-                qos_list = parts[4].split(',') if parts[4] else []
-                grp_tres = parts[5] if parts[5] else ''
-                max_tres = parts[6] if parts[6] else ''
-                max_tres_per_user = parts[7] if parts[7] else ''
-                max_wall = parts[8] if parts[8] else ''
-                fairshare = parts[9] if parts[9] else 'parent'
-                max_jobs = parts[10] if parts[10] else ''
-                max_submit = parts[11] if parts[11] else ''
-                default_qos = parts[12] if parts[12] else ''
-                
-                quota_info = {
-                    'grp_tres': grp_tres if grp_tres else 'N/A',
-                    'max_tres': max_tres if max_tres else 'N/A',
-                    'max_tres_per_user': max_tres_per_user if max_tres_per_user else 'N/A',
-                    'max_wall': max_wall if max_wall else 'N/A',
-                    'fairshare': fairshare if fairshare else 'parent',
-                    'max_jobs': max_jobs if max_jobs else 'N/A',
-                    'max_submit': max_submit if max_submit else 'N/A',
-                    'default_qos': default_qos if default_qos else ''
-                }
-                
-                if account and account not in [a['name'] for a in topology['accounts']]:
+    if tree_output and not tree_output.startswith("Error"):
+        lines = tree_output.strip().split('\n')
+        current_account = None
+        current_qos = None
+        account_qos_map = {}
+        
+        for line in lines:
+            stripped = line.strip()
+            if not stripped or stripped.startswith('Account') or stripped.startswith('-'):
+                continue
+            
+            raw_account = line[0:20]
+            user = line[20:40].strip()
+            qos = line[40:60].strip()
+            default_qos = line[60:70].strip()
+            
+            indent = len(line) - len(line.lstrip())
+            account = raw_account.strip()
+            
+            if indent == 0:
+                current_account = account
+                current_qos = qos
+                account_qos_map[account] = qos
+                if account and account not in accounts_set:
+                    accounts_set.add(account)
                     topology['accounts'].append({
                         'name': account,
-                        'cluster': cluster,
-                        'quota': quota_info
+                        'quota': {
+                            'default_qos': default_qos if default_qos else ''
+                        }
                     })
-                    account_quota_map[account] = quota_info
                 
-                if user and user not in [u['name'] for u in topology['users']]:
-                    topology['users'].append({
+                if qos:
+                    topology['links'].append({
+                        'from': 'qos',
+                        'from_name': qos,
+                        'to': 'account',
+                        'to_name': account
+                    })
+            
+            elif indent > 0 and account and not user:
+                current_account = account
+                current_qos = qos
+                account_qos_map[account] = qos
+                if account not in accounts_set:
+                    accounts_set.add(account)
+                    topology['accounts'].append({
+                        'name': account,
+                        'quota': {
+                            'default_qos': default_qos if default_qos else ''
+                        }
+                    })
+                
+                if qos:
+                    topology['links'].append({
+                        'from': 'qos',
+                        'from_name': qos,
+                        'to': 'account',
+                        'to_name': account
+                    })
+            
+            elif indent > 0 and user:
+                if user not in users_dict:
+                    parent_qos = current_qos if current_qos else account_qos_map.get(current_account, '')
+                    users_dict[user] = {
                         'name': user,
-                        'account': account,
-                        'quota': quota_info
-                    })
-                    user_quota_map[user] = quota_info
-                
-                for qos in qos_list:
-                    if qos:
+                        'account': current_account,
+                        'quota': {
+                            'default_qos': default_qos if default_qos else ''
+                        }
+                    }
+                    
+                    topology['users'].append(users_dict[user])
+                    
+                    if current_account:
+                        topology['links'].append({
+                            'from': 'account',
+                            'from_name': current_account,
+                            'to': 'user',
+                            'to_name': user
+                        })
+                    
+                    if parent_qos:
                         topology['links'].append({
                             'from': 'qos',
-                            'from_name': qos,
-                            'to': 'account',
-                            'to_name': account
+                            'from_name': parent_qos,
+                            'to': 'user',
+                            'to_name': user
                         })
-                
-                if user:
-                    topology['links'].append({
-                        'from': 'account',
-                        'from_name': account,
-                        'to': 'user',
-                        'to_name': user
-                    })
     
     return jsonify(topology)
 
