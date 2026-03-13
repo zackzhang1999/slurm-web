@@ -1,4 +1,4 @@
-# Slurm 集群监控系统 v1.4.0
+# Slurm 集群监控系统 v1.5.0
 
 一个功能全面的 Web 版 Slurm 作业调度系统监控面板，支持 **Socket.IO 实时更新**。
 
@@ -175,6 +175,7 @@ gunicorn -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker -w 1 -b 0.0.0
 - `GET /api/diag` - 调度器诊断
 - `GET /api/history/jobs?hours=24&limit=30` - 历史作业（支持限制条数）
 - `GET /api/allsystems` - 所有数据
+- `GET /api/announcements` - 获取公告列表
 
 ### Socket.IO 事件
 
@@ -196,6 +197,13 @@ gunicorn -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker -w 1 -b 0.0.0
 - `POST /api/node/<name>/drain` - 排空节点（仅管理员）
 - `POST /api/node/<name>/resume` - 恢复节点（仅管理员）
 - `POST /api/verify-password` - 验证管理员密码
+
+### 公告管理接口
+
+- `GET /api/announcements` - 获取公告列表
+- `POST /api/announcements` - 添加公告（仅管理员）
+- `PUT /api/announcements/<id>` - 更新公告（仅管理员）
+- `DELETE /api/announcements/<id>` - 删除公告（仅管理员）
 
 ### 预留管理接口
 
@@ -302,12 +310,16 @@ slurm-web/
 
 ## 更新日志
 
-### v1.5.0 (2026-03-11)
+### v1.5.0 (2026-03-13)
 - **新增登录系统** - 管理员和普通用户区分登录
   - 管理员登录：验证管理员密码，拥有全部功能
   - 普通用户登录：验证 Slurm 用户列表，默认密码 123456
   - 首次登录必须修改密码
 - **新增磁盘配额监控** - 使用 `repquota -avus` 获取用户磁盘配额
+- **新增信息公告模块** - 独立的公告管理页面
+  - 管理员可添加、编辑、删除公告
+  - 普通用户只能查看公告
+  - 支持紧急/普通优先级
 - **权限控制**：
   - 管理员：可执行所有管理操作（取消、暂停、恢复作业、Drain/Resume节点、创建预留等）
   - 普通用户：只能查看和提交作业，只能操作自己的作业

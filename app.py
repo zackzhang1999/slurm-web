@@ -1478,6 +1478,93 @@ def api_update_app_config():
     save_config(config)
     return jsonify({'success': True, 'message': '配置已更新'})
 
+# ============== 公告管理 ==============
+@app.route('/api/announcements', methods=['GET'])
+def api_get_announcements():
+    """获取公告列表"""
+    config = load_config()
+    announcements = config.get('announcements', [])
+    return jsonify({'success': True, 'announcements': announcements})
+
+@app.route('/api/announcements', methods=['POST'])
+def api_add_announcement():
+    """添加公告（仅管理员）"""
+    if session.get('user_type') != 'admin':
+        return jsonify({'success': False, 'message': '权限不足'}), 403
+    
+    data = request.json or {}
+    title = data.get('title', '').strip()
+    content = data.get('content', '').strip()
+    priority = data.get('priority', 'normal')
+    
+    if not title or not content:
+        return jsonify({'success': False, 'message': '标题和内容不能为空'})
+    
+    config = load_config()
+    announcements = config.get('announcements', [])
+    
+    new_id = max([a.get('id', 0) for a in announcements], default=0) + 1
+    new_announcement = {
+        'id': new_id,
+        'title': title,
+        'content': content,
+        'priority': priority,
+        'created_at': datetime.datetime.now().isoformat()
+    }
+    
+    announcements.insert(0, new_announcement)
+    config['announcements'] = announcements
+    save_config(config)
+    
+    return jsonify({'success': True, 'announcement': new_announcement})
+
+@app.route('/api/announcements/<int:announcement_id>', methods=['PUT'])
+def api_update_announcement(announcement_id):
+    """更新公告（仅管理员）"""
+    if session.get('user_type') != 'admin':
+        return jsonify({'success': False, 'message': '权限不足'}), 403
+    
+    data = request.json or {}
+    title = data.get('title', '').strip()
+    content = data.get('content', '').strip()
+    priority = data.get('priority', 'normal')
+    
+    if not title or not content:
+        return jsonify({'success': False, 'message': '标题和内容不能为空'})
+    
+    config = load_config()
+    announcements = config.get('announcements', [])
+    
+    for announcement in announcements:
+        if announcement.get('id') == announcement_id:
+            announcement['title'] = title
+            announcement['content'] = content
+            announcement['priority'] = priority
+            announcement['updated_at'] = datetime.datetime.now().isoformat()
+            break
+    else:
+        return jsonify({'success': False, 'message': '公告不存在'})
+    
+    config['announcements'] = announcements
+    save_config(config)
+    
+    return jsonify({'success': True})
+
+@app.route('/api/announcements/<int:announcement_id>', methods=['DELETE'])
+def api_delete_announcement(announcement_id):
+    """删除公告（仅管理员）"""
+    if session.get('user_type') != 'admin':
+        return jsonify({'success': False, 'message': '权限不足'}), 403
+    
+    config = load_config()
+    announcements = config.get('announcements', [])
+    
+    announcements = [a for a in announcements if a.get('id') != announcement_id]
+    config['announcements'] = announcements
+    save_config(config)
+    
+    return jsonify({'success': True})
+
 @app.route('/api/job/<job_id>/hold', methods=['POST'])
 def api_job_hold(job_id):
     result = run_command(f"scontrol hold {job_id}")

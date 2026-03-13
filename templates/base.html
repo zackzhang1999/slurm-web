@@ -390,6 +390,12 @@
                         </a>
                     </li>
                     <li>
+                        <a href="#" data-page="announcements" onclick="switchPage('announcements'); return false;" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+                            <i class="fas fa-bullhorn w-5"></i>
+                            信息公告
+                        </a>
+                    </li>
+                    <li>
                         <a href="#" data-page="nodes" onclick="switchPage('nodes'); return false;" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">
                             <i class="fas fa-desktop w-5"></i>
                             节点监控
@@ -813,6 +819,7 @@
             // 更新页面标题
             const pageTitles = {
                 'dashboard': ['仪表盘', '集群概览与实时监控'],
+                'announcements': ['信息公告', '系统公告与通知'],
                 'nodes': ['节点监控', '集群节点状态详情'],
                 'jobs': ['作业管理', '查看和管理作业队列'],
                 'gpu': ['GPU监控', 'GPU 使用情况和状态'],
@@ -847,6 +854,8 @@
                 window.loadUsersData();
             } else if (page === 'partitions' && window.loadPartitionsData) {
                 window.loadPartitionsData();
+            } else if (page === 'announcements' && window.loadAnnouncements) {
+                window.loadAnnouncements();
             }
             
             // 更新 URL（不刷新页面）
