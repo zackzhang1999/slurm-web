@@ -58,9 +58,6 @@
     <button class="tab-btn active" onclick="switchTab('accounts', this)">
         <i class="fas fa-folder-tree mr-2"></i>账户层级
     </button>
-    <button class="tab-btn" onclick="switchTab('topology', this)">
-        <i class="fas fa-project-diagram mr-2"></i>组织拓扑
-    </button>
     <button class="tab-btn" onclick="switchTab('users', this)">
         <i class="fas fa-users mr-2"></i>用户列表
     </button>
@@ -86,42 +83,6 @@
             </div>
             <div id="accounts-content" class="hidden">
                 <div id="account-tree" class="space-y-2"></div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- 组织拓扑 Tab -->
-<div id="tab-topology" class="tab-content">
-    <div class="bg-white rounded-xl shadow-sm border border-slate-200">
-        <div class="p-6 border-b border-slate-200 flex items-center justify-between">
-            <h3 class="text-lg font-semibold text-slate-800">
-                <i class="fas fa-project-diagram text-primary-500 mr-2"></i>组织拓扑图
-            </h3>
-            <button onclick="loadTopologyData()" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors">
-                <i class="fas fa-sync-alt mr-2"></i>刷新
-            </button>
-        </div>
-        <div class="p-6">
-            <div id="topology-loading" class="flex items-center justify-center py-12 text-slate-500">
-                <div class="spinner mr-3"></div>加载中...
-            </div>
-            <div id="topology-content" class="hidden">
-                <div id="topology-legend" class="flex items-center gap-6 mb-4 text-sm">
-                    <div class="flex items-center">
-                        <div class="w-4 h-4 rounded-full bg-emerald-500 mr-2"></div>
-                        <span>QOS</span>
-                    </div>
-                    <div class="flex items-center">
-                        <div class="w-4 h-4 rounded-full bg-blue-500 mr-2"></div>
-                        <span>账户</span>
-                    </div>
-                    <div class="flex items-center">
-                        <div class="w-4 h-4 rounded-full bg-purple-500 mr-2"></div>
-                        <span>用户</span>
-                    </div>
-                </div>
-                <div id="topology-container" class="overflow-x-auto"></div>
             </div>
         </div>
     </div>
