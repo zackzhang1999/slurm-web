@@ -23,8 +23,12 @@ app.config['SECRET_KEY'] = 'slurm-monitor-secret-key-change-in-production'
 app.config['JSON_SORT_KEYS'] = False
 app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(minutes=30)
 
+# 动态获取项目根目录
+APP_ROOT = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE = os.path.join(APP_ROOT, 'config.json')
+USER_DB_FILE = os.path.join(APP_ROOT, 'users.json')
+
 # Load config
-CONFIG_FILE = '/root/slurm-web/config.json'
 def load_config():
     try:
         with open(CONFIG_FILE, 'r') as f:
@@ -37,7 +41,6 @@ def save_config(config):
         json.dump(config, f, indent=2)
 
 # ============== 用户管理 ==============
-USER_DB_FILE = '/root/slurm-web/users.json'
 
 def load_users():
     try:
