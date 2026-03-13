@@ -181,7 +181,8 @@ function renderTopology(data) {
     // 账户节点
     (data.accounts || []).forEach(a => {
         const pos = positions['account:' + a.name];
-        nodesHtml += renderAccountNodeHTML(pos.x, pos.y, a, data.users || [], data, positions);
+        const linkedUsers = (data.users || []).filter(u => u.account === a.name);
+        nodesHtml += renderAccountNodeHTML(pos.x, pos.y, a, linkedUsers, data, positions);
     });
     
     // 用户节点
