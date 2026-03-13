@@ -2727,6 +2727,206 @@ def api_accounts_tree():
     return jsonify(tree)
 
 
+@app.route('/api/organization-topology')
+def api_organization_topology():
+    """Get organization topology: QOS -> Account -> User hierarchy"""
+    assoc_output = run_command(
+        "sacctmgr show assoc format=Cluster,Account,User,Partition,QOS,GrpTRES,MaxTRES,MaxTRESPerUser,MaxWall,Fairshare,MaxJobs,MaxSubmitJobs,DefaultQOS "
+        "--noheader --parsable2 2>/dev/null"
+    )
+    
+    qos_output = run_command(
+        "sacctmgr show qos format=Name,GrpTRES,MaxTRES,MaxTRESPerUser,MaxWall,Priority,MaxJobs,MaxSubmitJobs,Preempt "
+        "--noheader --parsable2 2>/dev/null"
+    )
+    
+    topology = {
+        'qos': [],
+        'accounts': [],
+        'users': [],
+        'links': []
+    }
+    
+    qos_dict = {}
+    if qos_output and not qos_output.startswith("Error"):
+        for line in qos_output.strip().split('\n'):
+            parts = line.split('|')
+            if len(parts) >= 8:
+                qos_name = parts[0]
+                qos_dict[qos_name] = {
+                    'name': qos_name,
+                    'grp_tres': parts[1] if parts[1] else 'N/A',
+                    'max_tres': parts[2] if parts[2] else 'N/A',
+                    'max_tres_per_user': parts[3] if parts[3] else 'N/A',
+                    'max_wall': parts[4] if parts[4] else 'N/A',
+                    'priority': parts[5] if parts[5] else 'N/A',
+                    'max_jobs': parts[6] if parts[6] else 'N/A',
+                    'max_submit': parts[7] if parts[7] else 'N/A',
+                    'preempt': parts[8] if parts[8] else ''
+                }
+                topology['qos'].append(qos_dict[qos_name])
+    
+    account_quota_map = {}
+    user_quota_map = {}
+    
+    if assoc_output and not assoc_output.startswith("Error"):
+        for line in assoc_output.strip().split('\n'):
+            parts = line.split('|')
+            if len(parts) >= 13:
+                cluster = parts[0]
+                account = parts[1]
+                user = parts[2] if parts[2] else ''
+                partition = parts[3] if parts[3] else 'ALL'
+                qos_list = parts[4].split(',') if parts[4] else []
+                grp_tres = parts[5] if parts[5] else ''
+                max_tres = parts[6] if parts[6] else ''
+                max_tres_per_user = parts[7] if parts[7] else ''
+                max_wall = parts[8] if parts[8] else ''
+                fairshare = parts[9] if parts[9] else 'parent'
+                max_jobs = parts[10] if parts[10] else ''
+                max_submit = parts[11] if parts[11] else ''
+                default_qos = parts[12] if parts[12] else ''
+                
+                quota_info = {
+                    'grp_tres': grp_tres if grp_tres else 'N/A',
+                    'max_tres': max_tres if max_tres else 'N/A',
+                    'max_tres_per_user': max_tres_per_user if max_tres_per_user else 'N/A',
+                    'max_wall': max_wall if max_wall else 'N/A',
+                    'fairshare': fairshare if fairshare else 'parent',
+                    'max_jobs': max_jobs if max_jobs else 'N/A',
+                    'max_submit': max_submit if max_submit else 'N/A',
+                    'default_qos': default_qos if default_qos else ''
+                }
+                
+                if account and account not in [a['name'] for a in topology['accounts']]:
+                    topology['accounts'].append({
+                        'name': account,
+                        'cluster': cluster,
+                        'quota': quota_info
+                    })
+                    account_quota_map[account] = quota_info
+                
+                if user and user not in [u['name'] for u in topology['users']]:
+                    topology['users'].append({
+                        'name': user,
+                        'account': account,
+                        'quota': quota_info
+                    })
+                    user_quota_map[user] = quota_info
+                
+                for qos in qos_list:
+                    if qos:
+                        topology['links'].append({
+                            'from': 'qos',
+                            'from_name': qos,
+                            'to': 'account',
+                            'to_name': account
+                        })
+                
+                if account:
+                    topology['links'].append({
+                        'from': 'account',
+                        'from_name': account,
+                        'to': 'user',
+                        'to_name': user if user else account
+                    })
+    
+    return jsonify(topology)
+    
+    topology = {
+        'qos': [],
+        'accounts': [],
+        'users': [],
+        'links': []
+    }
+    
+    qos_dict = {}
+    if qos_output and not qos_output.startswith("Error"):
+        for line in qos_output.strip().split('\n'):
+            parts = line.split('|')
+            if len(parts) >= 8:
+                qos_name = parts[0]
+                qos_dict[qos_name] = {
+                    'name': qos_name,
+                    'grp_tres': parts[1] if parts[1] else 'N/A',
+                    'max_tres': parts[2] if parts[2] else 'N/A',
+                    'max_tres_per_user': parts[3] if parts[3] else 'N/A',
+                    'max_wall': parts[4] if parts[4] else 'N/A',
+                    'priority': parts[5] if parts[5] else 'N/A',
+                    'max_jobs': parts[6] if parts[6] else 'N/A',
+                    'max_submit': parts[7] if parts[7] else 'N/A',
+                    'preempt': parts[8] if parts[8] else ''
+                }
+                topology['qos'].append(qos_dict[qos_name])
+    
+    account_quota_map = {}
+    user_quota_map = {}
+    
+    if assoc_output and not assoc_output.startswith("Error"):
+        for line in assoc_output.strip().split('\n'):
+            parts = line.split('|')
+            if len(parts) >= 13:
+                cluster = parts[0]
+                account = parts[1]
+                user = parts[2] if parts[2] else ''
+                partition = parts[3] if parts[3] else 'ALL'
+                qos_list = parts[4].split(',') if parts[4] else []
+                grp_tres = parts[5] if parts[5] else ''
+                max_tres = parts[6] if parts[6] else ''
+                max_tres_per_user = parts[7] if parts[7] else ''
+                max_wall = parts[8] if parts[8] else ''
+                fairshare = parts[9] if parts[9] else 'parent'
+                max_jobs = parts[10] if parts[10] else ''
+                max_submit = parts[11] if parts[11] else ''
+                default_qos = parts[12] if parts[12] else ''
+                
+                quota_info = {
+                    'grp_tres': grp_tres if grp_tres else 'N/A',
+                    'max_tres': max_tres if max_tres else 'N/A',
+                    'max_tres_per_user': max_tres_per_user if max_tres_per_user else 'N/A',
+                    'max_wall': max_wall if max_wall else 'N/A',
+                    'fairshare': fairshare if fairshare else 'parent',
+                    'max_jobs': max_jobs if max_jobs else 'N/A',
+                    'max_submit': max_submit if max_submit else 'N/A',
+                    'default_qos': default_qos if default_qos else ''
+                }
+                
+                if account and account not in [a['name'] for a in topology['accounts']]:
+                    topology['accounts'].append({
+                        'name': account,
+                        'cluster': cluster,
+                        'quota': quota_info
+                    })
+                    account_quota_map[account] = quota_info
+                
+                if user and user not in [u['name'] for u in topology['users']]:
+                    topology['users'].append({
+                        'name': user,
+                        'account': account,
+                        'quota': quota_info
+                    })
+                    user_quota_map[user] = quota_info
+                
+                for qos in qos_list:
+                    if qos:
+                        topology['links'].append({
+                            'from': 'qos',
+                            'from_name': qos,
+                            'to': 'account',
+                            'to_name': account
+                        })
+                
+                if account:
+                    topology['links'].append({
+                        'from': 'account',
+                        'from_name': account,
+                        'to': 'user',
+                        'to_name': user if user else account
+                    })
+    
+    return jsonify(topology)
+
+
 @app.route('/api/accounts', methods=['POST'])
 def api_account_create():
     """Create a new account"""

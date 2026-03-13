@@ -58,6 +58,9 @@
     <button class="tab-btn active" onclick="switchTab('accounts', this)">
         <i class="fas fa-folder-tree mr-2"></i>账户层级
     </button>
+    <button class="tab-btn" onclick="switchTab('topology', this)">
+        <i class="fas fa-project-diagram mr-2"></i>组织拓扑
+    </button>
     <button class="tab-btn" onclick="switchTab('users', this)">
         <i class="fas fa-users mr-2"></i>用户列表
     </button>
@@ -83,6 +86,42 @@
             </div>
             <div id="accounts-content" class="hidden">
                 <div id="account-tree" class="space-y-2"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 组织拓扑 Tab -->
+<div id="tab-topology" class="tab-content">
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200">
+        <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-slate-800">
+                <i class="fas fa-project-diagram text-primary-500 mr-2"></i>组织拓扑图
+            </h3>
+            <button onclick="loadTopologyData()" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors">
+                <i class="fas fa-sync-alt mr-2"></i>刷新
+            </button>
+        </div>
+        <div class="p-6">
+            <div id="topology-loading" class="flex items-center justify-center py-12 text-slate-500">
+                <div class="spinner mr-3"></div>加载中...
+            </div>
+            <div id="topology-content" class="hidden">
+                <div id="topology-legend" class="flex items-center gap-6 mb-4 text-sm">
+                    <div class="flex items-center">
+                        <div class="w-4 h-4 rounded-full bg-emerald-500 mr-2"></div>
+                        <span>QOS</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-4 h-4 rounded-full bg-blue-500 mr-2"></div>
+                        <span>账户</span>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-4 h-4 rounded-full bg-purple-500 mr-2"></div>
+                        <span>用户</span>
+                    </div>
+                </div>
+                <div id="topology-container" class="overflow-x-auto"></div>
             </div>
         </div>
     </div>
@@ -314,6 +353,183 @@ async function loadAssociations() {
     } catch (error) {
         console.error('Error loading associations:', error);
     }
+}
+
+// 加载组织拓扑数据
+async function loadTopologyData() {
+    try {
+        document.getElementById('topology-loading').classList.remove('hidden');
+        document.getElementById('topology-content').classList.add('hidden');
+        
+        const response = await fetch('/api/organization-topology');
+        const data = await response.json();
+        
+        renderTopology(data);
+        
+        document.getElementById('topology-loading').classList.add('hidden');
+        document.getElementById('topology-content').classList.remove('hidden');
+    } catch (error) {
+        console.error('Error loading topology:', error);
+        document.getElementById('topology-loading').textContent = '加载失败: ' + error.message;
+    }
+}
+
+// 渲染组织拓扑图
+function renderTopology(data) {
+    const container = document.getElementById('topology-container');
+    container.innerHTML = '';
+    
+    if ((!data.qos || data.qos.length === 0) && 
+        (!data.accounts || data.accounts.length === 0) && 
+        (!data.users || data.users.length === 0)) {
+        container.innerHTML = '<div class="text-center py-12 text-slate-500"><i class="fas fa-project-diagram text-4xl mb-3"></i><p>暂无拓扑数据</p></div>';
+        return;
+    }
+    
+    // 创建节点映射
+    const nodes = {};
+    
+    // 添加 QOS 节点
+    data.qos.forEach(q => {
+        nodes['qos:' + q.name] = { type: 'qos', data: q, children: [] };
+    });
+    
+    // 添加账户节点
+    data.accounts.forEach(a => {
+        nodes['account:' + a.name] = { type: 'account', data: a, children: [] };
+    });
+    
+    // 添加用户节点
+    data.users.forEach(u => {
+        nodes['user:' + u.name] = { type: 'user', data: u, children: [] };
+    });
+    
+    // 建立连接关系
+    data.links.forEach(link => {
+        const fromKey = link.from + ':' + link.from_name;
+        const toKey = link.to + ':' + link.to_name;
+        
+        if (nodes[fromKey] && nodes[toKey]) {
+            nodes[fromKey].children.push(nodes[toKey]);
+        }
+    });
+    
+    // 找到根节点（没有被连接的节点）
+    const childKeys = new Set();
+    data.links.forEach(link => {
+        childKeys.add(link.to + ':' + link.to_name);
+    });
+    
+    // 渲染树形结构
+    let html = '<div class="flex flex-col items-center">';
+    
+    // 渲染 QOS 层
+    if (data.qos && data.qos.length > 0) {
+        html += '<div class="flex flex-wrap justify-center gap-4 mb-8">';
+        data.qos.forEach(q => {
+            html += renderTopologyNode('qos', q, nodes['qos:q.name']?.children || []);
+        });
+        html += '</div>';
+        
+        if (data.accounts && data.accounts.length > 0) {
+            html += '<div class="flex justify-center mb-4"><i class="fas fa-arrow-down text-slate-400"></i></div>';
+        }
+    }
+    
+    // 渲染账户层
+    if (data.accounts && data.accounts.length > 0) {
+        html += '<div class="flex flex-wrap justify-center gap-4 mb-8">';
+        data.accounts.forEach(a => {
+            const linkedUsers = data.users.filter(u => {
+                return data.links.some(l => l.from === 'account' && l.from_name === a.name && l.to === 'user' && l.to_name === u.name);
+            });
+            html += renderTopologyNode('account', a, linkedUsers);
+        });
+        html += '</div>';
+    }
+    
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+// 渲染单个拓扑节点
+function renderTopologyNode(type, data, children) {
+    const colors = {
+        'qos': 'bg-emerald-500',
+        'account': 'bg-blue-500',
+        'user': 'bg-purple-500'
+    };
+    
+    const labels = {
+        'qos': 'QOS',
+        'account': '账户',
+        'user': '用户'
+    };
+    
+    const icon = {
+        'qos': 'fa-cog',
+        'account': 'fa-folder',
+        'user': 'fa-user'
+    };
+    
+    let quotaHtml = '';
+    if (data.quota) {
+        const q = data.quota;
+        quotaHtml = `
+            <div class="text-xs text-left mt-2 space-y-1">
+                ${q.grp_tres !== 'N/A' ? `<div><span class="text-slate-500">组资源:</span> ${q.grp_tres}</div>` : ''}
+                ${q.max_tres !== 'N/A' ? `<div><span class="text-slate-500">最大资源:</span> ${q.max_tres}</div>` : ''}
+                ${q.max_wall !== 'N/A' ? `<div><span class="text-slate-500">最大时长:</span> ${q.max_wall}</div>` : ''}
+                ${q.max_jobs !== 'N/A' ? `<div><span class="text-slate-500">最大作业:</span> ${q.max_jobs}</div>` : ''}
+                ${q.fairshare !== 'N/A' && q.fairshare !== 'parent' ? `<div><span class="text-slate-500">公平分享:</span> ${q.fairshare}</div>` : ''}
+            </div>
+        `;
+    } else if (data.grp_tres) {
+        quotaHtml = `
+            <div class="text-xs text-left mt-2 space-y-1">
+                ${data.grp_tres !== 'N/A' ? `<div><span class="text-slate-500">组资源:</span> ${data.grp_tres}</div>` : ''}
+                ${data.max_tres !== 'N/A' ? `<div><span class="text-slate-500">最大资源:</span> ${data.max_tres}</div>` : ''}
+                ${data.max_wall !== 'N/A' ? `<div><span class="text-slate-500">最大时长:</span> ${data.max_wall}</div>` : ''}
+                ${data.max_jobs !== 'N/A' ? `<div><span class="text-slate-500">最大作业:</span> ${data.max_jobs}</div>` : ''}
+                ${data.priority ? `<div><span class="text-slate-500">优先级:</span> ${data.priority}</div>` : ''}
+            </div>
+        `;
+    }
+    
+    let childrenHtml = '';
+    if (children && children.length > 0 && type !== 'user') {
+        childrenHtml = '<div class="flex flex-wrap justify-center gap-2 mt-4 pt-4 border-t border-slate-200">';
+        children.forEach(child => {
+            const childColor = child.type === 'user' ? 'bg-purple-500' : 'bg-blue-500';
+            childrenHtml += `
+                <div class="px-3 py-1 ${childColor} text-white rounded-full text-xs cursor-pointer hover:opacity-80 transition-opacity">
+                    <i class="fas fa-${child.type === 'user' ? 'user' : 'folder'} mr-1"></i>${child.name || child.data.name}
+                </div>
+            `;
+        });
+        childrenHtml += '</div>';
+    }
+    
+    return `
+        <div class="inline-block bg-white rounded-lg shadow-md border border-slate-200 p-4 min-w-[180px] max-w-[250px] relative group">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-full ${colors[type]} flex items-center justify-center text-white">
+                    <i class="fas ${icon[type]}"></i>
+                </div>
+                <div>
+                    <div class="text-xs text-slate-500">${labels[type]}</div>
+                    <div class="font-semibold text-slate-800">${data.name}</div>
+                </div>
+            </div>
+            ${quotaHtml}
+            ${childrenHtml}
+            <!-- Hover tooltip -->
+            <div class="absolute left-0 top-full mt-2 w-64 bg-slate-800 text-white text-xs rounded-lg p-3 hidden group-hover:block z-10 shadow-xl">
+                <div class="font-semibold mb-2">${labels[type]}: ${data.name}</div>
+                ${quotaHtml ? quotaHtml.innerHTML || '' : (data.priority ? `<div>优先级: ${data.priority}</div>` : '')}
+            </div>
+        </div>
+    `;
 }
 
 // 更新统计
