@@ -2735,11 +2735,6 @@ def api_accounts_tree():
 @app.route('/api/organization-topology')
 def api_organization_topology():
     """Get organization topology: QOS -> Account -> User hierarchy using tree format"""
-    qos_output = run_command(
-        "sacctmgr show qos format=Name,GrpTRES,MaxTRES,MaxTRESPerUser,MaxWall,Priority,MaxJobs,MaxSubmitJobs,Preempt "
-        "--noheader --parsable2 2>/dev/null"
-    )
-    
     tree_output = run_command(
         "sacctmgr list associations tree format=Account,User,QOS,DefaultQOS 2>/dev/null"
     )
@@ -2751,22 +2746,10 @@ def api_organization_topology():
         'links': []
     }
     
-    if qos_output and not qos_output.startswith("Error"):
-        for line in qos_output.strip().split('\n'):
-            parts = line.split('|')
-            if len(parts) >= 2 and parts[0]:
-                qos_name = parts[0]
-                topology['qos'].append({
-                    'name': qos_name,
-                    'grp_tres': parts[1] if len(parts) > 1 and parts[1] else 'N/A',
-                    'max_tres': parts[2] if len(parts) > 2 and parts[2] else 'N/A',
-                    'max_wall': parts[4] if len(parts) > 4 and parts[4] else 'N/A',
-                    'priority': parts[5] if len(parts) > 5 and parts[5] else 'N/A',
-                    'max_jobs': parts[6] if len(parts) > 6 and parts[6] else 'N/A'
-                })
-    
+    qos_quota_map = {}
     accounts_set = set()
     users_dict = {}
+    used_qos = set()
     
     if tree_output and not tree_output.startswith("Error"):
         lines = tree_output.strip().split('\n')
@@ -2786,6 +2769,9 @@ def api_organization_topology():
             
             indent = len(line) - len(line.lstrip())
             account = raw_account.strip()
+            
+            if qos:
+                used_qos.add(qos)
             
             if indent == 0:
                 current_account = account
@@ -2857,6 +2843,32 @@ def api_organization_topology():
                             'to': 'user',
                             'to_name': user
                         })
+    
+    if used_qos:
+        qos_output = run_command(
+            "sacctmgr show qos format=Name,GrpTRES,MaxTRES,MaxTRESPerUser,MaxWall,Priority,MaxJobs,MaxSubmitJobs,Preempt "
+            "--noheader --parsable2 2>/dev/null"
+        )
+        
+        if qos_output and not qos_output.startswith("Error"):
+            for line in qos_output.strip().split('\n'):
+                parts = line.split('|')
+                if len(parts) >= 2 and parts[0] and parts[0] in used_qos:
+                    qos_name = parts[0]
+                    qos_quota_map[qos_name] = {
+                        'name': qos_name,
+                        'grp_tres': parts[1] if len(parts) > 1 and parts[1] else 'N/A',
+                        'max_tres': parts[2] if len(parts) > 2 and parts[2] else 'N/A',
+                        'max_wall': parts[4] if len(parts) > 4 and parts[4] else 'N/A',
+                        'priority': parts[5] if len(parts) > 5 and parts[5] else 'N/A',
+                        'max_jobs': parts[6] if len(parts) > 6 and parts[6] else 'N/A'
+                    }
+        
+        for qos_name in used_qos:
+            if qos_name in qos_quota_map:
+                topology['qos'].append(qos_quota_map[qos_name])
+            else:
+                topology['qos'].append({'name': qos_name, 'grp_tres': 'N/A', 'max_tres': 'N/A', 'max_wall': 'N/A', 'priority': 'N/A', 'max_jobs': 'N/A'})
     
     return jsonify(topology)
 
