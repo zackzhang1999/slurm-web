@@ -2227,7 +2227,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // ============== 公告栏功能 ==============
 function loadAnnouncements() {
-    fetch('/api/announcements')
+    fetch('/api/announcements', {credentials: 'include'})
         .then(r => r.json())
         .then(data => {
             const container = document.getElementById('announcements-container');
@@ -2332,7 +2332,7 @@ function addAnnouncement() {
 }
 
 function editAnnouncement(id) {
-    fetch('/api/announcements')
+    fetch('/api/announcements', {credentials: 'include'})
         .then(r => r.json())
         .then(data => {
             if (data.success) {
@@ -2347,7 +2347,7 @@ function editAnnouncement(id) {
 function deleteAnnouncement(id) {
     if (!confirm('确定要删除这条公告吗？')) return;
     
-    fetch(`/api/announcements/${id}`, {method: 'DELETE'})
+    fetch(`/api/announcements/${id}`, {method: 'DELETE', credentials: 'include'})
         .then(r => r.json())
         .then(data => {
             if (data.success) {
@@ -2431,6 +2431,7 @@ async function handleFileSelect(e) {
         try {
             const response = await fetch('/api/announcements/upload', {
                 method: 'POST',
+                credentials: 'include',
                 body: formData
             });
             const result = await response.json();
