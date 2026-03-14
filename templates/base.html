@@ -912,6 +912,11 @@
         
         // 密码验证
         function showPasswordModal(callback) {
+            // 如果是管理员登录，直接调用callback
+            if (window.currentUserType === 'admin') {
+                callback();
+                return;
+            }
             passwordCallback = callback;
             document.getElementById('password-modal').classList.add('active');
             document.getElementById('admin-password').value = '';
