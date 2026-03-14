@@ -254,13 +254,15 @@
 let accounts = [];
 let users = [];
 let associations = [];
+let qosList = [];
 
 // 加载所有数据
 async function loadAllData() {
     await Promise.all([
         loadAccounts(),
         loadUsers(),
-        loadAssociations()
+        loadAssociations(),
+        loadQosList()
     ]);
     updateStats();
 }
@@ -313,6 +315,16 @@ async function loadAssociations() {
         associations = await response.json();
     } catch (error) {
         console.error('Error loading associations:', error);
+    }
+}
+
+// 加载QOS列表
+async function loadQosList() {
+    try {
+        const response = await fetch('/api/qos');
+        qosList = await response.json();
+    } catch (error) {
+        console.error('Error loading QOS list:', error);
     }
 }
 
@@ -749,11 +761,6 @@ async function deleteAccount(name) {
     } catch (error) {
         alert('删除失败');
     }
-}
-
-// 查看用户详情
-function viewUserDetail(username) {
-    alert(`用户详情: ${username}\n\n功能开发中...`);
 }
 
 // 页面加载完成后加载数据
