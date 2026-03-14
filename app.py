@@ -2773,28 +2773,12 @@ def api_organization_topology():
             if qos:
                 used_qos.add(qos)
             
+            # indent=0: root根账户，完全忽略
             if indent == 0:
-                current_account = account
-                current_qos = qos
-                account_qos_map[account] = qos
-                if account and account not in accounts_set:
-                    accounts_set.add(account)
-                    topology['accounts'].append({
-                        'name': account,
-                        'quota': {
-                            'default_qos': default_qos if default_qos else ''
-                        }
-                    })
-                
-                if qos:
-                    topology['links'].append({
-                        'from': 'qos',
-                        'from_name': qos,
-                        'to': 'account',
-                        'to_name': account
-                    })
+                continue
             
-            elif indent > 0 and account and not user:
+            # indent=1 + User为空: 统计account和qos的关系
+            if indent == 1 and not user and account:
                 current_account = account
                 current_qos = qos
                 account_qos_map[account] = qos
@@ -2815,9 +2799,10 @@ def api_organization_topology():
                         'to_name': account
                     })
             
-            elif indent > 0 and user:
+            # indent=1 + User不为空: root用户，忽略
+            # indent=2: 统计account->user->qos的关系
+            elif indent >= 2 and user and current_account:
                 if user not in users_dict:
-                    parent_qos = current_qos if current_qos else account_qos_map.get(current_account, '')
                     users_dict[user] = {
                         'name': user,
                         'account': current_account,
@@ -2828,18 +2813,17 @@ def api_organization_topology():
                     
                     topology['users'].append(users_dict[user])
                     
-                    if current_account:
-                        topology['links'].append({
-                            'from': 'account',
-                            'from_name': current_account,
-                            'to': 'user',
-                            'to_name': user
-                        })
+                    topology['links'].append({
+                        'from': 'account',
+                        'from_name': current_account,
+                        'to': 'user',
+                        'to_name': user
+                    })
                     
-                    if parent_qos:
+                    if current_qos:
                         topology['links'].append({
                             'from': 'qos',
-                            'from_name': parent_qos,
+                            'from_name': current_qos,
                             'to': 'user',
                             'to_name': user
                         })
