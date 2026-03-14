@@ -2497,7 +2497,6 @@ function removeFile(index) {
 }
 
 async function saveAnnouncement(id) {
-    console.log('Saving announcement, id:', id);
     const title = document.getElementById('ann-title').value.trim();
     const content = document.getElementById('ann-content').value.trim();
     const priority = document.getElementById('ann-priority').value;
@@ -2511,7 +2510,6 @@ async function saveAnnouncement(id) {
     
     const url = id ? `/api/announcements/${id}` : '/api/announcements';
     const method = id ? 'PUT' : 'POST';
-    console.log('Saving to:', url, 'method:', method, 'data:', {title, content, priority, files});
     
     fetch(url, {
         method: method,
@@ -2520,7 +2518,6 @@ async function saveAnnouncement(id) {
     })
     .then(r => r.json())
     .then(data => {
-        console.log('Save response:', data);
         if (data.success) {
             closeAnnouncementModal();
             loadAnnouncements();

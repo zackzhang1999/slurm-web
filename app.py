@@ -1469,8 +1469,9 @@ def api_update_app_config():
     data = request.json or {}
     config = load_config()
     
-    # Verify current password if enabled
-    if config.get('password_enabled', True):
+    # Verify current password if enabled (skip if admin session)
+    is_admin_session = session.get('user_type') == 'admin'
+    if config.get('password_enabled', True) and not is_admin_session:
         current_password = data.get('current_password', '')
         if current_password != config.get('admin_password', 'admin888'):
             return jsonify({'success': False, 'message': '当前密码错误'}), 403
@@ -1632,9 +1633,10 @@ def api_job_release(job_id):
 # Node management
 @app.route('/api/node/<node_name>/drain', methods=['POST'])
 def api_node_drain(node_name):
-    # Verify password
+    # Verify password - skip if admin logged in via session
     config = load_config()
-    if config.get('password_enabled', True):
+    is_admin_session = session.get('user_type') == 'admin'
+    if config.get('password_enabled', True) and not is_admin_session:
         data = request.json or {}
         if data.get('password') != config.get('admin_password', 'admin'):
             return jsonify({'success': False, 'message': '密码错误'}), 401
@@ -1667,9 +1669,10 @@ def api_node_drain(node_name):
 
 @app.route('/api/node/<node_name>/resume', methods=['POST'])
 def api_node_resume(node_name):
-    # Verify password
+    # Verify password - skip if admin logged in via session
     config = load_config()
-    if config.get('password_enabled', True):
+    is_admin_session = session.get('user_type') == 'admin'
+    if config.get('password_enabled', True) and not is_admin_session:
         data = request.json or {}
         if data.get('password') != config.get('admin_password', 'admin'):
             return jsonify({'success': False, 'message': '密码错误'}), 401
@@ -2374,7 +2377,8 @@ def api_qos_limits():
 def api_set_resource_quota():
     """Set resource quota for an association"""
     config = load_config()
-    if config.get('password_enabled', True):
+    is_admin_session = session.get('user_type') == 'admin'
+    if config.get('password_enabled', True) and not is_admin_session:
         data = request.json or {}
         password = data.get('password', '')
         if password != config.get('admin_password', 'admin888'):
@@ -2442,7 +2446,8 @@ def api_set_resource_quota():
 def api_clear_resource_quota():
     """Clear a specific resource quota (set to -1)"""
     config = load_config()
-    if config.get('password_enabled', True):
+    is_admin_session = session.get('user_type') == 'admin'
+    if config.get('password_enabled', True) and not is_admin_session:
         data = request.json or {}
         password = data.get('password', '')
         if password != config.get('admin_password', 'admin888'):
@@ -2538,7 +2543,8 @@ def api_qos_detail(qos_name):
 def api_qos_create():
     """Create a new QOS"""
     config = load_config()
-    if config.get('password_enabled', True):
+    is_admin_session = session.get('user_type') == 'admin'
+    if config.get('password_enabled', True) and not is_admin_session:
         data = request.json or {}
         password = data.get('password', '')
         if password != config.get('admin_password', 'admin888'):
@@ -2572,7 +2578,8 @@ def api_qos_create():
 def api_qos_modify(qos_name):
     """Modify a QOS"""
     config = load_config()
-    if config.get('password_enabled', True):
+    is_admin_session = session.get('user_type') == 'admin'
+    if config.get('password_enabled', True) and not is_admin_session:
         data = request.json or {}
         password = data.get('password', '')
         if password != config.get('admin_password', 'admin888'):
@@ -2620,7 +2627,8 @@ def api_qos_modify(qos_name):
 def api_qos_delete(qos_name):
     """Delete a QOS"""
     config = load_config()
-    if config.get('password_enabled', True):
+    is_admin_session = session.get('user_type') == 'admin'
+    if config.get('password_enabled', True) and not is_admin_session:
         data = request.json or {}
         password = data.get('password', '')
         if password != config.get('admin_password', 'admin888'):
@@ -2639,7 +2647,8 @@ def api_qos_delete(qos_name):
 def api_qos_associate(qos_name):
     """Associate QOS with account or user - add or remove qos"""
     config = load_config()
-    if config.get('password_enabled', True):
+    is_admin_session = session.get('user_type') == 'admin'
+    if config.get('password_enabled', True) and not is_admin_session:
         data = request.json or {}
         password = data.get('password', '')
         if password != config.get('admin_password', 'admin888'):
@@ -2961,7 +2970,8 @@ def api_organization_topology():
 def api_account_create():
     """Create a new account"""
     config = load_config()
-    if config.get('password_enabled', True):
+    is_admin_session = session.get('user_type') == 'admin'
+    if config.get('password_enabled', True) and not is_admin_session:
         data = request.json or {}
         password = data.get('password', '')
         if password != config.get('admin_password', 'admin888'):
@@ -2998,7 +3008,8 @@ def api_account_create():
 def api_account_delete(account_name):
     """Delete an account"""
     config = load_config()
-    if config.get('password_enabled', True):
+    is_admin_session = session.get('user_type') == 'admin'
+    if config.get('password_enabled', True) and not is_admin_session:
         data = request.json or {}
         password = data.get('password', '')
         if password != config.get('admin_password', 'admin888'):
@@ -3062,7 +3073,8 @@ def api_user_associations(username):
 def api_user_create():
     """Create a new user association"""
     config = load_config()
-    if config.get('password_enabled', True):
+    is_admin_session = session.get('user_type') == 'admin'
+    if config.get('password_enabled', True) and not is_admin_session:
         data = request.json or {}
         password = data.get('password', '')
         if password != config.get('admin_password', 'admin888'):
@@ -3100,7 +3112,8 @@ def api_user_create():
 def api_user_modify(username):
     """Modify a user"""
     config = load_config()
-    if config.get('password_enabled', True):
+    is_admin_session = session.get('user_type') == 'admin'
+    if config.get('password_enabled', True) and not is_admin_session:
         data = request.json or {}
         password = data.get('password', '')
         if password != config.get('admin_password', 'admin888'):
@@ -3132,7 +3145,8 @@ def api_user_modify(username):
 def api_association_create():
     """Create a new association (user-account link)"""
     config = load_config()
-    if config.get('password_enabled', True):
+    is_admin_session = session.get('user_type') == 'admin'
+    if config.get('password_enabled', True) and not is_admin_session:
         data = request.json or {}
         password = data.get('password', '')
         if password != config.get('admin_password', 'admin888'):
@@ -3168,7 +3182,8 @@ def api_association_create():
 def api_association_delete():
     """Delete an association"""
     config = load_config()
-    if config.get('password_enabled', True):
+    is_admin_session = session.get('user_type') == 'admin'
+    if config.get('password_enabled', True) and not is_admin_session:
         data = request.json or {}
         password = data.get('password', '')
         if password != config.get('admin_password', 'admin888'):

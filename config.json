@@ -1,21 +1,5 @@
 {
   "admin_password": "888888",
   "password_enabled": true,
-  "announcements": [
-    {
-      "id": 2,
-      "title": "test",
-      "content": "test",
-      "priority": "urgent",
-      "created_at": "2026-03-13T21:02:21.598108",
-      "updated_at": "2026-03-14T20:54:24.550659"
-    },
-    {
-      "id": 1,
-      "title": "\u6b22\u8fce\u4f7f\u7528 Slurm \u96c6\u7fa4\u76d1\u63a7\u7cfb\u7edf",
-      "content": "\u7cfb\u7edf\u5df2\u5347\u7ea7\u81f3 v1.4.0\uff0c\u6b22\u8fce\u4f7f\u7528\uff01",
-      "created_at": "2026-03-13T10:00:00",
-      "priority": "normal"
-    }
-  ]
+  "announcements": []
 }
