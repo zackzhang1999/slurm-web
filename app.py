@@ -2854,13 +2854,16 @@ def api_organization_topology():
                     })
                     
                     # 如果用户有独立的QOS（!=账户QOS），则QOS直接连线到用户
+                    # 支持多个QOS（逗号分隔）
                     if qos and qos != current_qos:
-                        topology['links'].append({
-                            'from': 'qos',
-                            'from_name': qos,
-                            'to': 'user',
-                            'to_name': user
-                        })
+                        qos_list = [q.strip() for q in qos.split(',') if q.strip()]
+                        for user_qos in qos_list:
+                            topology['links'].append({
+                                'from': 'qos',
+                                'from_name': user_qos,
+                                'to': 'user',
+                                'to_name': user
+                            })
     
     if used_qos:
         qos_output = run_command(
