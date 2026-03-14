@@ -2803,7 +2803,8 @@ def api_organization_topology():
             account = raw_account.strip()
             
             if qos:
-                used_qos.add(qos)
+                for q in qos.split(','):
+                    used_qos.add(q.strip())
             
             # indent=0: root根账户，完全忽略
             if indent == 0:
