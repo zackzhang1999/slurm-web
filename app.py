@@ -2589,6 +2589,38 @@ def api_qos_delete(qos_name):
         return jsonify({'success': False, 'message': result}), 500
 
 
+@app.route('/api/qos/<qos_name>/associate', methods=['POST'])
+def api_qos_associate(qos_name):
+    """Associate QOS with account or user"""
+    config = load_config()
+    if config.get('password_enabled', True):
+        data = request.json or {}
+        password = data.get('password', '')
+        if password != config.get('admin_password', 'admin888'):
+            return jsonify({'success': False, 'message': '密码错误'}), 403
+    
+    data = request.json or {}
+    assoc_type = data.get('assoc_type', 'account')
+    target = data.get('target', '')
+    
+    if not target:
+        return jsonify({'success': False, 'message': '请选择关联目标'}), 400
+    
+    if assoc_type == 'account':
+        command = f"sacctmgr -i modify qos where name={qos_name} set account={target}"
+    elif assoc_type == 'user':
+        command = f"sacctmgr -i modify qos where name={qos_name} set user={target}"
+    else:
+        return jsonify({'success': False, 'message': '无效的关联类型'}), 400
+    
+    result = run_command(command)
+    
+    if result and not result.startswith("Error"):
+        return jsonify({'success': True, 'message': f'QOS {qos_name} 已关联到 {assoc_type} {target}'})
+    else:
+        return jsonify({'success': False, 'message': result}), 500
+
+
 @app.route('/api/qos/<qos_name>/associations')
 def api_qos_associations(qos_name):
     """Get associations (users/accounts) using this QOS"""

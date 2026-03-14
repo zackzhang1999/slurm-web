@@ -66,6 +66,7 @@
                         <th class="px-4 py-3 text-left text-center">每用户<br>最大作业数</th>
                         <th class="px-4 py-3 text-left">最大运行时间</th>
                         <th class="px-4 py-3 text-left">最大资源限制</th>
+                        <th class="px-4 py-3 text-left">关联</th>
                         <th class="px-4 py-3 text-left">抢占模式</th>
                         <th class="px-4 py-3 text-left">操作</th>
                     </tr>
@@ -200,17 +201,67 @@
         </div>
     </div>
 </div>
+
+<!-- 设置QOS关联模态框 -->
+<div id="assoc-modal" class="modal">
+    <div class="modal-content">
+        <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+            <h3 class="text-lg font-semibold"><i class="fas fa-link text-primary-500 mr-2"></i>设置QOS关联</h3>
+            <button onclick="closeModal('assoc-modal')" class="text-slate-400 hover:text-slate-600">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="p-6">
+            <form id="assoc-form" class="space-y-4">
+                <input type="hidden" id="assoc-qos-name">
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">关联类型 *</label>
+                    <select id="assoc-type" onchange="updateAssocOptions()" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                        <option value="account">账户 (Account)</option>
+                        <option value="user">用户 (User)</option>
+                    </select>
+                    <p class="text-xs text-slate-500 mt-1">账户和用户只能选择一种进行关联</p>
+                </div>
+                
+                <div>
+                    <label id="assoc-target-label" class="block text-sm font-medium text-slate-700 mb-1">选择账户 *</label>
+                    <select id="assoc-target" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">管理员密码 *</label>
+                    <input type="password" id="assoc-password" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="请输入管理员密码">
+                </div>
+                
+                <div class="flex justify-end gap-3">
+                    <button type="button" onclick="closeModal('assoc-modal')" class="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50">取消</button>
+                    <button type="submit" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg">确认设置</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 let qosList = [];
+let accountList = [];
+let userList = [];
 
 // 加载QOS列表
 async function loadQosList() {
     try {
-        const response = await fetch('/api/qos');
-        qosList = await response.json();
+        const [qosRes, accountsRes] = await Promise.all([
+            fetch('/api/qos'),
+            fetch('/api/accounts')
+        ]);
+        qosList = await qosRes.json();
+        const accountsData = await accountsRes.json();
+        accountList = accountsData.accounts || [];
+        userList = accountsData.users || [];
         
         document.getElementById('stat-total').textContent = qosList.length;
         document.getElementById('stat-active').textContent = qosList.filter(q => q.flags !== 'Deleted').length;
@@ -260,6 +311,9 @@ function renderQosTable() {
             <td class="px-4 py-4 text-center">${formatLimit(maxJobsPerUser)}</td>
             <td class="px-4 py-4">${maxWall}</td>
             <td class="px-4 py-4 text-xs">${maxTres}</td>
+            <td class="px-4 py-4 text-sm">
+                ${qos.assoc_id ? `<span class="text-slate-500">-</span>` : `<button onclick="openAssocModal('${qos.name}')" class="text-primary-500 hover:text-primary-600" title="设置关联"><i class="fas fa-link"></i></button>`}
+            </td>
             <td class="px-4 py-4">${qos.preempt_mode || '-'}</td>
             <td class="px-4 py-4">
                 <button onclick="openEditModal('${qos.name}')" class="text-primary-500 hover:text-primary-600 mr-2" title="编辑">
@@ -428,6 +482,74 @@ async function deleteQos(name) {
         alert('删除失败');
     }
 }
+
+// 更新关联选项
+function updateAssocOptions() {
+    const type = document.getElementById('assoc-type').value;
+    const select = document.getElementById('assoc-target');
+    const label = document.getElementById('assoc-target-label');
+    
+    select.innerHTML = '';
+    
+    if (type === 'account') {
+        label.textContent = '选择账户 *';
+        accountList.forEach(a => {
+            select.innerHTML += `<option value="${a.name}">${a.name}</option>`;
+        });
+    } else {
+        label.textContent = '选择用户 *';
+        userList.forEach(u => {
+            select.innerHTML += `<option value="${u.name}">${u.name}</option>`;
+        });
+    }
+}
+
+// 打开设置关联模态框
+function openAssocModal(qosName) {
+    document.getElementById('assoc-modal').classList.add('active');
+    document.getElementById('assoc-qos-name').value = qosName;
+    document.getElementById('assoc-password').value = '';
+    document.getElementById('assoc-type').value = 'account';
+    updateAssocOptions();
+}
+
+// 提交设置关联
+document.getElementById('assoc-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const qosName = document.getElementById('assoc-qos-name').value;
+    const assocType = document.getElementById('assoc-type').value;
+    const target = document.getElementById('assoc-target').value;
+    const password = document.getElementById('assoc-password').value;
+    
+    if (!password) {
+        alert('请输入管理员密码');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/qos/${qosName}/associate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                assoc_type: assocType,
+                target: target,
+                password: password
+            })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('QOS关联设置成功');
+            closeModal('assoc-modal');
+            loadQosList();
+        } else {
+            alert('设置失败: ' + result.message);
+        }
+    } catch (error) {
+        alert('设置失败');
+    }
+});
 
 // 查看QOS详情
 async function viewQosDetail(name) {
