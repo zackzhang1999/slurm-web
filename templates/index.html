@@ -2227,9 +2227,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // ============== 公告栏功能 ==============
 function loadAnnouncements() {
-    fetch('/api/announcements', {credentials: 'include'})
+    fetch('/api/announcements?_t=' + Date.now(), {credentials: 'include'})
         .then(r => r.json())
         .then(data => {
+            console.log('Loaded announcements:', data);
             const container = document.getElementById('announcements-container');
             const noAnnouncements = document.getElementById('no-announcements');
             
