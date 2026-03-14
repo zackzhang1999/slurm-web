@@ -2813,12 +2813,15 @@ def api_organization_topology():
                     
                     topology['users'].append(users_dict[user])
                     
-                    topology['links'].append({
-                        'from': 'account',
-                        'from_name': current_account,
-                        'to': 'user',
-                        'to_name': user
-                    })
+                    # 如果用户绑定的QOS == 账户绑定的QOS（或用户没有独立QOS），显示account->user连线
+                    # 如果用户有独立的QOS（!=账户QOS），不显示account->user，只显示QOS->User
+                    if not qos or qos == current_qos:
+                        topology['links'].append({
+                            'from': 'account',
+                            'from_name': current_account,
+                            'to': 'user',
+                            'to_name': user
+                        })
                     
                     # 如果用户绑定的QOS != 账户绑定的QOS，则QOS直接连线到用户
                     # 否则用户继承账户的QOS，不需要额外连线
