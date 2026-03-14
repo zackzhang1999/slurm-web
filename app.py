@@ -2591,7 +2591,7 @@ def api_qos_delete(qos_name):
 
 @app.route('/api/qos/<qos_name>/associate', methods=['POST'])
 def api_qos_associate(qos_name):
-    """Associate QOS with account or user"""
+    """Associate QOS with account or user - add or remove qos"""
     config = load_config()
     if config.get('password_enabled', True):
         data = request.json or {}
@@ -2600,23 +2600,36 @@ def api_qos_associate(qos_name):
             return jsonify({'success': False, 'message': '密码错误'}), 403
     
     data = request.json or {}
+    action = data.get('action', 'add')
     assoc_type = data.get('assoc_type', 'account')
     target = data.get('target', '')
     
     if not target:
-        return jsonify({'success': False, 'message': '请选择关联目标'}), 400
+        return jsonify({'success': False, 'message': '请输入账户或用户名称'}), 400
     
-    if assoc_type == 'account':
-        command = f"sacctmgr -i modify qos where name={qos_name} set account={target}"
-    elif assoc_type == 'user':
-        command = f"sacctmgr -i modify qos where name={qos_name} set user={target}"
+    if action == 'add':
+        if assoc_type == 'account':
+            command = f"sacctmgr -i modify account {target} set qos+={qos_name}"
+        elif assoc_type == 'user':
+            command = f"sacctmgr -i modify user {target} set qos+={qos_name}"
+        else:
+            return jsonify({'success': False, 'message': '无效的关联类型'}), 400
+        op = '添加'
+    elif action == 'remove':
+        if assoc_type == 'account':
+            command = f"sacctmgr -i modify account {target} set qos-={qos_name}"
+        elif assoc_type == 'user':
+            command = f"sacctmgr -i modify user {target} set qos-={qos_name}"
+        else:
+            return jsonify({'success': False, 'message': '无效的关联类型'}), 400
+        op = '移除'
     else:
-        return jsonify({'success': False, 'message': '无效的关联类型'}), 400
+        return jsonify({'success': False, 'message': '无效的操作类型'}), 400
     
     result = run_command(command)
     
     if result and not result.startswith("Error"):
-        return jsonify({'success': True, 'message': f'QOS {qos_name} 已关联到 {assoc_type} {target}'})
+        return jsonify({'success': True, 'message': f'QOS {qos_name} {op}成功到 {assoc_type} {target}'})
     else:
         return jsonify({'success': False, 'message': result}), 500
 

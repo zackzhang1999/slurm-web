@@ -216,12 +216,19 @@
                 <input type="hidden" id="assoc-qos-name">
                 
                 <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">操作类型 *</label>
+                    <select id="assoc-action" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                        <option value="add">添加 QOS 关联</option>
+                        <option value="remove">移除 QOS 关联</option>
+                    </select>
+                </div>
+                
+                <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">关联类型 *</label>
-                    <select id="assoc-type" onchange="updateAssocOptions()" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                    <select id="assoc-type" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
                         <option value="account">账户 (account)</option>
                         <option value="user">用户 (user)</option>
                     </select>
-                    <p class="text-xs text-slate-500 mt-1">账户和用户只能选择一种进行关联</p>
                 </div>
                 
                 <div>
@@ -236,7 +243,7 @@
                 
                 <div class="flex justify-end gap-3">
                     <button type="button" onclick="closeModal('assoc-modal')" class="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50">取消</button>
-                    <button type="submit" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg">确认设置</button>
+                    <button type="submit" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg">确认</button>
                 </div>
             </form>
         </div>
@@ -482,18 +489,6 @@ async function deleteQos(name) {
     }
 }
 
-// 更新关联选项
-function updateAssocOptions() {
-    const type = document.getElementById('assoc-type').value;
-    const label = document.getElementById('assoc-target-label');
-    
-    if (type === 'account') {
-        label.textContent = '账户名称 *';
-    } else {
-        label.textContent = '用户名称 *';
-    }
-}
-
 // 打开设置关联模态框
 function openAssocModal(qosName) {
     document.getElementById('assoc-modal').classList.add('active');
@@ -508,6 +503,7 @@ document.getElementById('assoc-form').addEventListener('submit', async function(
     e.preventDefault();
     
     const qosName = document.getElementById('assoc-qos-name').value;
+    const action = document.getElementById('assoc-action').value;
     const assocType = document.getElementById('assoc-type').value;
     const target = document.getElementById('assoc-target').value;
     const password = document.getElementById('assoc-password').value;
@@ -522,6 +518,7 @@ document.getElementById('assoc-form').addEventListener('submit', async function(
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+                action: action,
                 assoc_type: assocType,
                 target: target,
                 password: password
@@ -530,7 +527,7 @@ document.getElementById('assoc-form').addEventListener('submit', async function(
         const result = await response.json();
         
         if (result.success) {
-            alert('QOS关联设置成功');
+            alert(action === 'add' ? 'QOS关联添加成功' : 'QOS关联移除成功');
             closeModal('assoc-modal');
             loadQosList();
         } else {
