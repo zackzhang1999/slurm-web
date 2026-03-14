@@ -2820,10 +2820,12 @@ def api_organization_topology():
                         'to_name': user
                     })
                     
-                    if current_qos:
+                    # 如果用户绑定的QOS != 账户绑定的QOS，则QOS直接连线到用户
+                    # 否则用户继承账户的QOS，不需要额外连线
+                    if qos and qos != current_qos:
                         topology['links'].append({
                             'from': 'qos',
-                            'from_name': current_qos,
+                            'from_name': qos,
                             'to': 'user',
                             'to_name': user
                         })
