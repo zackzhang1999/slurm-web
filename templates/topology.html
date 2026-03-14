@@ -34,6 +34,10 @@
                         <div class="w-4 h-4 rounded-full bg-purple-500 mr-2"></div>
                         <span>用户</span>
                     </div>
+                    <div class="flex items-center">
+                        <div class="w-4 h-4 rounded-full bg-amber-500 mr-2"></div>
+                        <span>QOS→用户</span>
+                    </div>
                 </div>
                 <div id="topology-container" class="overflow-auto" style="min-height: 500px; position: relative;"></div>
             </div>
@@ -150,11 +154,20 @@ function renderTopology(data) {
     let svgHtml = `<svg width="${totalWidth}" height="${svgHeight}" style="position: absolute; top: 0; left: 0; pointer-events: none; z-index: 1;">`;
     
     // QOS -> Account 连接线
-    data.links.filter(l => l.from === 'qos').forEach(link => {
+    data.links.filter(l => l.from === 'qos' && l.to === 'account').forEach(link => {
         const fromPos = positions['qos:' + link.from_name];
         const toPos = positions['account:' + link.to_name];
         if (fromPos && toPos) {
             svgHtml += createCurve(fromPos.x + nodeWidth/2, fromPos.y + nodeHeight, toPos.x + nodeWidth/2, toPos.y, '#10b981');
+        }
+    });
+    
+    // QOS -> User 直接连线（用户有独立QOS时）
+    data.links.filter(l => l.from === 'qos' && l.to === 'user').forEach(link => {
+        const fromPos = positions['qos:' + link.from_name];
+        const toPos = positions['user:' + link.to_name];
+        if (fromPos && toPos) {
+            svgHtml += createCurve(fromPos.x + nodeWidth/2, fromPos.y + nodeHeight, toPos.x + nodeWidth/2, toPos.y, '#f59e0b');
         }
     });
     
