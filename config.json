@@ -5,9 +5,10 @@
     {
       "id": 2,
       "title": "test",
-      "content": "aaaaaaaaaaaa\na\naaaaaaaaaaa\n\naaaaa\n\naaaa",
+      "content": "test",
       "priority": "urgent",
-      "created_at": "2026-03-13T21:02:21.598108"
+      "created_at": "2026-03-13T21:02:21.598108",
+      "updated_at": "2026-03-14T20:54:24.550659"
     },
     {
       "id": 1,
