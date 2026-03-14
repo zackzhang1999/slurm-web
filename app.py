@@ -22,6 +22,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'slurm-monitor-secret-key-change-in-production'
 app.config['JSON_SORT_KEYS'] = False
 app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(minutes=30)
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # 动态获取项目根目录
 APP_ROOT = os.path.dirname(os.path.abspath(__file__))
