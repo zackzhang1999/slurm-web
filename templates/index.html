@@ -2514,6 +2514,7 @@ async function saveAnnouncement(id) {
     fetch(url, {
         method: method,
         headers: {'Content-Type': 'application/json'},
+        credentials: 'include',
         body: JSON.stringify({title, content, priority, files})
     })
     .then(r => r.json())
@@ -2524,6 +2525,10 @@ async function saveAnnouncement(id) {
         } else {
             alert('保存失败: ' + data.message);
         }
+    })
+    .catch(err => {
+        console.error('保存公告失败:', err);
+        alert('保存失败: ' + err.message);
     });
 }
 
