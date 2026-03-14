@@ -1510,8 +1510,6 @@ def api_add_announcement():
     if not title or not content:
         return jsonify({'success': False, 'message': '标题和内容不能为空'})
     
-    files = data.get('files', [])
-    
     config = load_config()
     announcements = config.get('announcements', [])
     
@@ -1521,7 +1519,6 @@ def api_add_announcement():
         'title': title,
         'content': content,
         'priority': priority,
-        'files': files,
         'created_at': datetime.datetime.now().isoformat()
     }
     
@@ -1541,7 +1538,6 @@ def api_update_announcement(announcement_id):
     title = data.get('title', '').strip()
     content = data.get('content', '').strip()
     priority = data.get('priority', 'normal')
-    files = data.get('files', [])
     
     if not title or not content:
         return jsonify({'success': False, 'message': '标题和内容不能为空'})
@@ -1554,7 +1550,6 @@ def api_update_announcement(announcement_id):
             announcement['title'] = title
             announcement['content'] = content
             announcement['priority'] = priority
-            announcement['files'] = files
             announcement['updated_at'] = datetime.datetime.now().isoformat()
             break
     else:
@@ -1579,46 +1574,6 @@ def api_delete_announcement(announcement_id):
     save_config(config)
     
     return jsonify({'success': True})
-
-
-@app.route('/api/announcements/upload', methods=['POST'])
-def api_announcement_upload():
-    """上传公告图片或文件"""
-    if session.get('user_type') != 'admin':
-        return jsonify({'success': False, 'message': '权限不足'}), 403
-    
-    if 'file' not in request.files:
-        return jsonify({'success': False, 'message': '没有文件'}), 400
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'success': False, 'message': '未选择文件'}), 400
-    
-    import os
-    from werkzeug.utils import secure_filename
-    
-    config = load_config()
-    upload_dir = config.get('upload_dir', 'static/uploads')
-    
-    if not os.path.isabs(upload_dir):
-        upload_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), upload_dir)
-    
-    os.makedirs(upload_dir, exist_ok=True)
-    
-    filename = secure_filename(file.filename)
-    import time
-    timestamp = int(time.time())
-    new_filename = f"{timestamp}_{filename}"
-    file_path = os.path.join(upload_dir, new_filename)
-    file.save(file_path)
-    
-    file_url = f"/static/uploads/{new_filename}"
-    
-    return jsonify({
-        'success': True,
-        'url': file_url,
-        'filename': filename
-    })
 
 
 @app.route('/api/job/<job_id>/hold', methods=['POST'])
