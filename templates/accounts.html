@@ -784,5 +784,114 @@ async function checkUserStatus() {
         console.error('检查用户状态失败:', e);
     }
 }
+
+// 用户详情抽屉
+function viewUserDetail(username) {
+    const drawer = document.getElementById('user-detail-drawer');
+    const content = document.getElementById('user-detail-content');
+    
+    drawer.classList.add('active');
+    content.innerHTML = '<div class="flex items-center justify-center py-12"><div class="spinner"></div>加载中...</div>';
+    
+    const user = users.find(u => u.name === username);
+    const userAssocs = associations.filter(a => a.user === username);
+    const userQosList = qosList.filter(q => {
+        return userAssocs.some(assoc => {
+            return q.name === assoc.qos || (assoc.qos_list && assoc.qos_list.includes(q.name));
+        });
+    });
+    
+    let html = `
+        <div class="space-y-6">
+            <div class="flex items-center justify-between">
+                <h3 class="text-xl font-bold text-slate-800">
+                    <i class="fas fa-user text-primary-500 mr-2"></i>${username}
+                </h3>
+                <button onclick="closeUserDrawer()" class="text-slate-400 hover:text-slate-600">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="bg-slate-50 rounded-lg p-4">
+                <h4 class="font-medium text-slate-700 mb-3">基本信息</h4>
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <span class="text-slate-500">用户名:</span>
+                        <span class="font-medium ml-2">${user?.name || username}</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-500">默认账户:</span>
+                        <span class="font-medium ml-2">${user?.default_account || '-'}</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-500">管理员级别:</span>
+                        <span class="font-medium ml-2">${user?.admin_level || '无'}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-slate-50 rounded-lg p-4">
+                <h4 class="font-medium text-slate-700 mb-3">关联账户 (${userAssocs.length})</h4>
+                <div class="space-y-2">
+    `;
+    
+    userAssocs.forEach(assoc => {
+        html += `
+            <div class="bg-white rounded-lg p-3 border border-slate-200">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span class="font-medium">${assoc.account || '-'}</span>
+                        <span class="text-slate-400 text-sm ml-2">${assoc.cluster ? '@' + assoc.cluster : ''}</span>
+                    </div>
+                    <span class="badge badge-info">账户</span>
+                </div>
+                ${assoc.qos ? `<div class="mt-2 text-sm"><span class="text-slate-500">QOS:</span> <span class="font-medium">${assoc.qos}</span></div>` : ''}
+                ${assoc.default_qos ? `<div class="mt-1 text-sm"><span class="text-slate-500">默认QOS:</span> <span class="font-medium">${assoc.default_qos}</span></div>` : ''}
+            </div>
+        `;
+    });
+    
+    if (userAssocs.length === 0) {
+        html += '<p class="text-slate-400 text-sm">暂无关联账户</p>';
+    }
+    
+    html += `
+                </div>
+            </div>
+            
+            <div class="bg-slate-50 rounded-lg p-4">
+                <h4 class="font-medium text-slate-700 mb-3">关联QOS (${userQosList.length})</h4>
+                <div class="flex flex-wrap gap-2">
+    `;
+    
+    userQosList.forEach(q => {
+        html += `<span class="badge badge-warning">${q.name}</span>`;
+    });
+    
+    if (userQosList.length === 0) {
+        html += '<span class="text-slate-400 text-sm">暂无QOS信息</span>';
+    }
+    
+    html += `
+                </div>
+            </div>
+        </div>
+    `;
+    
+    content.innerHTML = html;
+}
+
+function closeUserDrawer() {
+    document.getElementById('user-detail-drawer').classList.remove('active');
+}
 </script>
+
+<!-- 用户详情抽屉 -->
+<div id="user-detail-drawer" class="drawer">
+    <div class="drawer-overlay" onclick="closeUserDrawer()"></div>
+    <div class="drawer-content">
+        <div id="user-detail-content" class="p-6">
+        </div>
+    </div>
+</div>
 {% endblock %}
