@@ -2825,12 +2825,15 @@ def api_organization_topology():
                     })
                 
                 if qos:
-                    topology['links'].append({
-                        'from': 'qos',
-                        'from_name': qos,
-                        'to': 'account',
-                        'to_name': account
-                    })
+                    for q in qos.split(','):
+                        q_name = q.strip()
+                        if q_name:
+                            topology['links'].append({
+                                'from': 'qos',
+                                'from_name': q_name,
+                                'to': 'account',
+                                'to_name': account
+                            })
             
             # indent=1 + User不为空: root用户，忽略
             # indent=2: 统计account->user->qos的关系
