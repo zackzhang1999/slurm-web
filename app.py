@@ -2916,9 +2916,7 @@ def api_organization_topology():
         for qos_name in used_qos:
             if qos_name in qos_quota_map:
                 topology['qos'].append(qos_quota_map[qos_name])
-            else:
-                topology['qos'].append({'name': qos_name, 'grp_tres': 'N/A', 'max_tres': 'N/A', 'max_wall': 'N/A', 'priority': 'N/A', 'max_jobs': 'N/A'})
-    
+                    
     return jsonify(topology)
 
 
