@@ -1,5 +1,13 @@
 {
   "admin_password": "888888",
   "password_enabled": true,
-  "announcements": []
+  "announcements": [
+    {
+      "id": 1,
+      "title": "w'w'w",
+      "content": "\u55e1\u55e1\u55e1",
+      "priority": "normal",
+      "created_at": "2026-03-14T22:23:12.394619"
+    }
+  ]
 }

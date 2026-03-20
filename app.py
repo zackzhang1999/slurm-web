@@ -3233,8 +3233,7 @@ def api_organization_topology():
         for qos_name in used_qos:
             if qos_name in qos_quota_map:
                 topology['qos'].append(qos_quota_map[qos_name])
-            # 跳过不存在的 QoS（只显示 sacctmgr show qos 中实际存在的 QoS）
-    
+                    
     return jsonify(topology)
 
 
