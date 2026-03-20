@@ -1341,14 +1341,331 @@ def api_jobs():
 
 @app.route('/api/job/<job_id>')
 def api_job_detail(job_id):
-    output = run_command(f"scontrol show job {job_id}")
+    """Get detailed job information using scontrol and sacct (like jobinfo script)"""
     details = {}
+    
+    # 1. First try scontrol for running/pending jobs
+    output = run_command(f"scontrol show job {job_id}")
     if output and not output.startswith("Error"):
         for line in output.split('\n'):
             for match in re.finditer(r'(\w+)=([^\s]+)', line):
                 key, value = match.groups()
                 details[key.lower()] = value
+    
+    # 2. Use sacct to get detailed information (like jobinfo script)
+    # Format similar to jobinfo: JobName,JobID,User,Account,Partition,QOS,NodeList,ReqTRES,State,ExitCode,
+    # Submit,Start,End,Reserved,Timelimit,Elapsed,TotalCPU,SystemCPU,UserCPU,ReqMem,MaxRSS,MaxDiskWrite,MaxDiskRead,WorkDir,SubmitLine
+    sacct_output = run_command(
+        f"sacct -j {job_id} --format=JobName,JobID,JobIDRaw,User,Account,Partition,QOS,NodeList,ReqTRES,State,ExitCode,"
+        f"Submit,Start,End,Reserved,Timelimit,Elapsed,TotalCPU,SystemCPU,UserCPU,ReqMem,MaxRSS,MaxDiskWrite,MaxDiskRead,WorkDir,SubmitLine "
+        f"--parsable2 --noheader 2>/dev/null"
+    )
+    
+    if sacct_output and not sacct_output.startswith("Error"):
+        lines = sacct_output.strip().split('\n')
+        for line in lines:
+            parts = line.split('|')
+            if len(parts) >= 25:
+                # Skip .extern steps, use the main job or batch step
+                job_id_raw = parts[1] if len(parts) > 1 else ''
+                if '.extern' in job_id_raw:
+                    continue
+                    
+                # Parse sacct fields
+                sacct_data = {
+                    'jobname': parts[0],
+                    'jobid': parts[1],
+                    'jobidraw': parts[2],
+                    'userid': parts[3],
+                    'account': parts[4],
+                    'partition': parts[5],
+                    'qos': parts[6],
+                    'nodelist': parts[7],
+                    'reqtres': parts[8],
+                    'state': parts[9],
+                    'exitcode': parts[10],
+                    'submittime': parts[11],
+                    'starttime': parts[12],
+                    'endtime': parts[13],
+                    'reserved': parts[14],  # Waited time
+                    'timelimit': parts[15],
+                    'elapsed': parts[16],
+                    'totalcpu': parts[17],
+                    'systemcpu': parts[18],
+                    'usercpu': parts[19],
+                    'reqmem': parts[20],
+                    'maxrss': parts[21],
+                    'maxdiskwrite': parts[22],
+                    'maxdiskread': parts[23],
+                    'workdir': parts[24],
+                    'submitline': parts[25] if len(parts) > 25 else ''
+                }
+                
+                # Merge with scontrol data (sacct takes precedence for overlapping fields)
+                for key, value in sacct_data.items():
+                    if value and value not in ['', 'None', 'null']:
+                        details[key] = value
+                
+                # Calculate additional metrics
+                # Extract GPU count from ReqTRES
+                reqtres = sacct_data.get('reqtres', '')
+                if reqtres and 'gpu' in reqtres.lower():
+                    gpu_match = re.search(r'gres/gpu=(\d+)', reqtres, re.IGNORECASE)
+                    if gpu_match:
+                        details['gpus'] = gpu_match.group(1)
+                    else:
+                        details['gpus'] = '0'
+                else:
+                    details['gpus'] = details.get('gpus', '0')
+                
+                # Calculate CPU utilization percentage
+                totalcpu = sacct_data.get('totalcpu', '')
+                elapsed = sacct_data.get('elapsed', '')
+                if totalcpu and elapsed and ':' in totalcpu and ':' in elapsed:
+                    try:
+                        # Convert time strings to seconds
+                        def time_to_seconds(t):
+                            parts = t.split(':')
+                            if len(parts) == 3:
+                                return int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+                            elif len(parts) == 2:
+                                return int(parts[0]) * 60 + float(parts[1])
+                            return 0
+                        
+                        totalcpu_sec = time_to_seconds(totalcpu)
+                        elapsed_sec = time_to_seconds(elapsed)
+                        numcpus = float(details.get('numcpus', details.get('reqcpus', '1')))
+                        
+                        if elapsed_sec > 0 and numcpus > 0:
+                            cpu_eff = (totalcpu_sec / (elapsed_sec * numcpus)) * 100
+                            details['cpu_efficiency'] = f"{cpu_eff:.2f}%"
+                    except:
+                        pass
+                
+                # Calculate memory utilization
+                maxrss = sacct_data.get('maxrss', '')
+                reqmem = sacct_data.get('reqmem', '')
+                if maxrss and reqmem:
+                    try:
+                        # Parse memory values (handle K, M, G, T suffixes)
+                        def parse_mem(val):
+                            val = val.strip()
+                            if not val or val == '':
+                                return 0
+                            units = {'K': 1024, 'M': 1024**2, 'G': 1024**3, 'T': 1024**4}
+                            unit = val[-1].upper() if val[-1].upper() in units else ''
+                            num = float(val[:-1]) if unit else float(val)
+                            return num * units.get(unit, 1)
+                        
+                        maxrss_bytes = parse_mem(maxrss)
+                        reqmem_bytes = parse_mem(reqmem)
+                        
+                        if reqmem_bytes > 0:
+                            mem_eff = (maxrss_bytes / reqmem_bytes) * 100
+                            details['mem_efficiency'] = f"{mem_eff:.2f}%"
+                            details['maxrss_formatted'] = format_bytes(maxrss_bytes)
+                    except:
+                        pass
+                
+                break  # Use first matching line (main job step)
+    
+    # 3. For running jobs, try to get real-time stats from sstat
+    state = details.get('state', '').upper()
+    if 'RUNNING' in state or 'R' in state:
+        sstat_output = run_command(
+            f"sstat -j {job_id} --format=JobID,MaxRSS,MaxDiskWrite,MaxDiskRead --parsable2 --noheader 2>/dev/null"
+        )
+        if sstat_output and not sstat_output.startswith("Error"):
+            lines = sstat_output.strip().split('\n')
+            for line in lines:
+                parts = line.split('|')
+                if len(parts) >= 4:
+                    if parts[1]:  # MaxRSS
+                        details['maxrss_live'] = parts[1]
+                    if parts[2]:  # MaxDiskWrite
+                        details['maxdiskwrite_live'] = parts[2]
+                    if parts[3]:  # MaxDiskRead
+                        details['maxdiskread_live'] = parts[3]
+                    break
+    
+    # 4. For pending jobs, get reason from squeue
+    if 'PENDING' in state or 'PD' in state:
+        squeue_output = run_command(
+            f"squeue -j {job_id} --format=%E;%R --noheader 2>/dev/null"
+        )
+        if squeue_output and not squeue_output.startswith("Error"):
+            parts = squeue_output.strip().split(';')
+            if len(parts) >= 2:
+                details['dependency'] = parts[0] if parts[0] else ''
+                details['reason'] = parts[1] if parts[1] else ''
+    
     return jsonify(details)
+
+
+def format_bytes(bytes_val):
+    """Convert bytes to human readable format"""
+    if bytes_val <= 0:
+        return "0B"
+    units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+    unit_index = 0
+    while bytes_val >= 1024 and unit_index < len(units) - 1:
+        bytes_val /= 1024
+        unit_index += 1
+    return f"{bytes_val:.2f}{units[unit_index]}"
+
+
+@app.route('/api/jobs/history')
+def api_jobs_history():
+    """Get historical jobs from past 30 days with pagination (like jobinfo)
+    
+    Query params:
+        days: Number of days to look back (default: 30, max: 90)
+        page: Page number (default: 1)
+        per_page: Items per page (default: 50, max: 100)
+        state: Filter by state (optional)
+        user: Filter by user (optional)
+        partition: Filter by partition (optional)
+    """
+    days = request.args.get('days', 30, type=int)
+    days = min(max(days, 1), 90)  # Limit to 1-90 days
+    
+    page = request.args.get('page', 1, type=int)
+    page = max(page, 1)
+    
+    per_page = request.args.get('per_page', 50, type=int)
+    per_page = min(max(per_page, 10), 100)  # Limit to 10-100 items per page
+    
+    state_filter = request.args.get('state', '')
+    user_filter = request.args.get('user', '')
+    partition_filter = request.args.get('partition', '')
+    
+    # Use sacct to get historical jobs - similar to jobinfo fields
+    # Note: Remove -X flag to get MaxRSS/MaxDiskWrite/MaxDiskRead from batch step
+    # Fields: JobID, JobName, User, Account, Partition, State, ExitCode, 
+    #         Submit, Start, End, Elapsed, Timelimit, ReqCPUS, ReqMem, 
+    #         ReqTRES, MaxRSS, MaxDiskWrite, MaxDiskRead, TotalCPU, NNodes
+    output = run_command(
+        f"sacct -S now-{days}days --format="
+        f"JobID,JobName,User,Account,Partition,State,ExitCode,"
+        f"Submit,Start,End,Elapsed,Timelimit,ReqCPUS,ReqMem,"
+        f"ReqTRES,MaxRSS,MaxDiskWrite,MaxDiskRead,TotalCPU,NNodes "
+        f"--parsable2 --noheader 2>/dev/null"
+    )
+    
+    # Parse sacct output and merge data from main job and batch steps
+    jobs_dict = {}  # Use dict to group by job_id
+    
+    if output and not output.startswith("Error"):
+        for line in output.strip().split('\n'):
+            if not line.strip():
+                continue
+            parts = line.split('|')
+            if len(parts) >= 20:
+                full_job_id = parts[0]
+                # Skip .extern steps
+                if '.extern' in full_job_id:
+                    continue
+                
+                # Extract base job_id (remove .batch suffix)
+                if '.batch' in full_job_id:
+                    job_id = full_job_id.replace('.batch', '')
+                    is_batch = True
+                else:
+                    job_id = full_job_id
+                    is_batch = False
+                
+                # Initialize job entry if not exists
+                if job_id not in jobs_dict:
+                    jobs_dict[job_id] = {}
+                
+                job_entry = jobs_dict[job_id]
+                
+                if is_batch:
+                    # Batch step contains resource usage data
+                    job_entry['maxrss'] = parts[15] if parts[15] else '-'
+                    job_entry['maxdiskwrite'] = parts[16] if parts[16] else '-'
+                    job_entry['maxdiskread'] = parts[17] if parts[17] else '-'
+                    job_entry['totalcpu'] = parts[18] if parts[18] else '-'
+                else:
+                    # Main job contains basic info
+                    job_entry['job_id'] = job_id
+                    job_entry['name'] = parts[1]
+                    job_entry['user'] = parts[2]
+                    job_entry['account'] = parts[3] if parts[3] else '-'
+                    job_entry['partition'] = parts[4]
+                    job_entry['state'] = parts[5]
+                    job_entry['exitcode'] = parts[6] if parts[6] else '-'
+                    job_entry['submit_time'] = parts[7]
+                    job_entry['start_time'] = parts[8] if parts[8] else '-'
+                    job_entry['end_time'] = parts[9] if parts[9] else '-'
+                    job_entry['elapsed'] = parts[10] if parts[10] else '-'
+                    job_entry['timelimit'] = parts[11] if parts[11] else '-'
+                    job_entry['cpus'] = parts[12] if parts[12] else '-'
+                    job_entry['reqmem'] = parts[13] if parts[13] else '-'
+                    job_entry['reqtres'] = parts[14] if parts[14] else ''
+                    job_entry['nodes'] = parts[19] if parts[19] else '1'
+                    
+                    # Also try to get resource usage from main job if batch step not available
+                    if 'maxrss' not in job_entry:
+                        job_entry['maxrss'] = parts[15] if parts[15] else '-'
+                        job_entry['maxdiskwrite'] = parts[16] if parts[16] else '-'
+                        job_entry['maxdiskread'] = parts[17] if parts[17] else '-'
+                        job_entry['totalcpu'] = parts[18] if parts[18] else '-'
+    
+    # Convert dict to list and add default values
+    jobs = []
+    for job_id, job in jobs_dict.items():
+        # Ensure all required fields exist
+        job.setdefault('maxrss', '-')
+        job.setdefault('maxdiskwrite', '-')
+        job.setdefault('maxdiskread', '-')
+        job.setdefault('totalcpu', '-')
+        
+        # Extract GPU count from ReqTRES
+        reqtres = job.get('reqtres', '')
+        if reqtres and 'gpu' in reqtres.lower():
+            gpu_match = re.search(r'gres/gpu=(\d+)', reqtres, re.IGNORECASE)
+            job['gpus'] = gpu_match.group(1) if gpu_match else '0'
+        else:
+            job['gpus'] = '0'
+        
+        # Apply filters
+        if state_filter and job.get('state') != state_filter:
+            continue
+        if user_filter and job.get('user') != user_filter:
+            continue
+        if partition_filter and job.get('partition') != partition_filter:
+            continue
+        
+        jobs.append(job)
+    
+    # Sort by submit time descending (newest first)
+    jobs.sort(key=lambda x: x['submit_time'], reverse=True)
+    
+    # Pagination
+    total = len(jobs)
+    total_pages = (total + per_page - 1) // per_page if total > 0 else 1
+    
+    # Ensure page is within bounds
+    if page > total_pages:
+        page = total_pages
+    
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    paginated_jobs = jobs[start_idx:end_idx]
+    
+    return jsonify({
+        'jobs': paginated_jobs,
+        'pagination': {
+            'page': page,
+            'per_page': per_page,
+            'total': total,
+            'total_pages': total_pages,
+            'has_next': page < total_pages,
+            'has_prev': page > 1
+        }
+    })
+
 
 @app.route('/api/priority')
 def api_priority():
@@ -2916,8 +3233,7 @@ def api_organization_topology():
         for qos_name in used_qos:
             if qos_name in qos_quota_map:
                 topology['qos'].append(qos_quota_map[qos_name])
-            else:
-                topology['qos'].append({'name': qos_name, 'grp_tres': 'N/A', 'max_tres': 'N/A', 'max_wall': 'N/A', 'priority': 'N/A', 'max_jobs': 'N/A'})
+            # 跳过不存在的 QoS（只显示 sacctmgr show qos 中实际存在的 QoS）
     
     return jsonify(topology)
 
@@ -3363,7 +3679,7 @@ if __name__ == '__main__':
     # updater.start()
     
     # Run SocketIO server
-    socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
+    socketio.run(app, host='0.0.0.0', port=5100, debug=False, allow_unsafe_werkzeug=True)
 
 
 # ============== Job Submission API ==============
@@ -3416,4 +3732,4 @@ if __name__ == '__main__':
     # updater.start()
     
     # Run SocketIO server
-    socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
+    socketio.run(app, host='0.0.0.0', port=5100, debug=False, allow_unsafe_werkzeug=True)
