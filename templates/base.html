@@ -589,8 +589,16 @@
                         <p id="job-detail-user" class="detail-value">--</p>
                     </div>
                     <div>
+                        <p class="detail-label">账户</p>
+                        <p id="job-detail-account" class="detail-value">--</p>
+                    </div>
+                    <div>
                         <p class="detail-label">分区</p>
                         <p id="job-detail-partition" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">QOS</p>
+                        <p id="job-detail-qos" class="detail-value">--</p>
                     </div>
                     <div>
                         <p class="detail-label">优先级</p>
@@ -618,7 +626,7 @@
                         <p id="job-detail-cpus" class="detail-value">--</p>
                     </div>
                     <div>
-                        <p class="detail-label">内存</p>
+                        <p class="detail-label">预留内存</p>
                         <p id="job-detail-memory" class="detail-value">--</p>
                     </div>
                     <div>
@@ -647,14 +655,106 @@
                         <p id="job-detail-start" class="detail-value">--</p>
                     </div>
                     <div>
-                        <p class="detail-label">运行时间</p>
-                        <p id="job-detail-time" class="detail-value">--</p>
+                        <p class="detail-label">结束时间</p>
+                        <p id="job-detail-end" class="detail-value">--</p>
                     </div>
                     <div>
-                        <p class="detail-label">剩余时间</p>
-                        <p id="job-detail-timeleft" class="detail-value">--</p>
+                        <p class="detail-label">等待时间</p>
+                        <p id="job-detail-waited" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">预留运行时间</p>
+                        <p id="job-detail-timelimit" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">实际运行时间</p>
+                        <p id="job-detail-elapsed" class="detail-value">--</p>
                     </div>
                 </div>
+            </div>
+            
+            <!-- CPU 使用详情 -->
+            <div class="detail-card" id="job-detail-cpu-section" style="display: none;">
+                <h4 class="font-semibold text-slate-800 mb-4 flex items-center">
+                    <i class="fas fa-chart-line text-info-500 mr-2"></i>CPU 使用详情
+                </h4>
+                <div class="detail-grid">
+                    <div>
+                        <p class="detail-label">CPU 总时间</p>
+                        <p id="job-detail-totalcpu" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">用户态时间</p>
+                        <p id="job-detail-usercpu" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">系统态时间</p>
+                        <p id="job-detail-systemcpu" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">CPU 利用率</p>
+                        <p id="job-detail-cpueff" class="detail-value">--</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 内存使用详情 -->
+            <div class="detail-card" id="job-detail-mem-section" style="display: none;">
+                <h4 class="font-semibold text-slate-800 mb-4 flex items-center">
+                    <i class="fas fa-memory text-purple-500 mr-2"></i>内存使用详情
+                </h4>
+                <div class="detail-grid">
+                    <div>
+                        <p class="detail-label">预留内存</p>
+                        <p id="job-detail-reqmem" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">最大内存使用</p>
+                        <p id="job-detail-maxrss" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">内存利用率</p>
+                        <p id="job-detail-memeff" class="detail-value">--</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 磁盘 I/O -->
+            <div class="detail-card" id="job-detail-io-section" style="display: none;">
+                <h4 class="font-semibold text-slate-800 mb-4 flex items-center">
+                    <i class="fas fa-hdd text-secondary-500 mr-2"></i>磁盘 I/O
+                </h4>
+                <div class="detail-grid">
+                    <div>
+                        <p class="detail-label">最大磁盘写入</p>
+                        <p id="job-detail-diskwrite" class="detail-value">--</p>
+                    </div>
+                    <div>
+                        <p class="detail-label">最大磁盘读取</p>
+                        <p id="job-detail-diskread" class="detail-value">--</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 状态信息 -->
+            <div class="detail-card" id="job-detail-exit-section" style="display: none;">
+                <h4 class="font-semibold text-slate-800 mb-4 flex items-center">
+                    <i class="fas fa-flag-checkered text-danger-500 mr-2"></i>完成状态
+                </h4>
+                <div class="detail-grid">
+                    <div>
+                        <p class="detail-label">退出码</p>
+                        <p id="job-detail-exitcode" class="detail-value">--</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 等待原因 (仅待运行作业显示) -->
+            <div class="detail-card" id="job-detail-reason-section" style="display: none;">
+                <h4 class="font-semibold text-slate-800 mb-4 flex items-center">
+                    <i class="fas fa-pause-circle text-warning-500 mr-2"></i>等待原因
+                </h4>
+                <p id="job-detail-reason" class="detail-value">--</p>
             </div>
             
             <!-- 路径信息 -->
@@ -665,12 +765,12 @@
                 <p id="job-detail-workdir" class="detail-value-mono">--</p>
             </div>
             
-            <!-- 命令信息（如果有） -->
+            <!-- 提交命令（如果有） -->
             <div class="detail-card" id="job-detail-command-section" style="display: none;">
                 <h4 class="font-semibold text-slate-800 mb-4 flex items-center">
-                    <i class="fas fa-terminal text-slate-500 mr-2"></i>执行命令
+                    <i class="fas fa-terminal text-slate-500 mr-2"></i>提交命令
                 </h4>
-                <p id="job-detail-command" class="detail-value-mono">--</p>
+                <p id="job-detail-command" class="detail-value-mono" style="white-space: pre-wrap; word-break: break-word;">--</p>
             </div>
             
             <!-- 操作按钮 -->
@@ -959,6 +1059,7 @@
             
             console.log('Loading job detail for:', jobId);
             console.log('window.allData:', window.allData);
+            console.log('window.historyJobsPagination:', window.historyJobsPagination);
             
             try {
                 // 从当前数据中查找作业（使用 == 允许类型转换）
@@ -966,6 +1067,15 @@
                 if (window.allData && window.allData.jobs && window.allData.jobs.length > 0) {
                     job = window.allData.jobs.find(j => j.job_id == jobId);
                     console.log('Found job in local data:', job);
+                }
+                
+                // 从历史任务数据中查找（确保变量存在且有数据）
+                if (!job && typeof window.historyJobsPagination !== 'undefined' && 
+                    window.historyJobsPagination && 
+                    Array.isArray(window.historyJobsPagination.jobs) &&
+                    window.historyJobsPagination.jobs.length > 0) {
+                    job = window.historyJobsPagination.jobs.find(j => j.job_id == jobId);
+                    console.log('Found job in history data:', job);
                 }
                 
                 // 如果本地没有，从API获取
@@ -994,9 +1104,10 @@
         function renderJobDetail(job) {
             console.log('Rendering job detail:', job);
             
-            // 适配两种数据格式：squeue格式 和 scontrol格式
+            // 适配多种数据格式：squeue格式、scontrol格式、sacct格式
             // squeue格式: job_id, user, name, state, nodes, cpus, memory, gres, etc.
             // scontrol格式: jobid, userid, jobname, jobstate, numnodes, numcpus, etc.
+            // sacct格式: jobid, userid, jobname, account, qos, state, exitcode, etc.
             
             // 基本信息
             const jobId = job.job_id || job.jobid || '';
@@ -1005,6 +1116,8 @@
             const partition = job.partition || '';
             const priority = job.priority || '';
             const state = job.state || job.jobstate || '';
+            const account = job.account || '';
+            const qos = job.qos || '';
             
             document.getElementById('job-detail-id').textContent = '#' + jobId;
             document.getElementById('job-detail-name').textContent = name || 'N/A';
@@ -1012,6 +1125,8 @@
             document.getElementById('job-detail-partition').textContent = partition || 'N/A';
             document.getElementById('job-detail-priority').textContent = priority || 'N/A';
             document.getElementById('job-detail-jobname').textContent = name || 'N/A';
+            document.getElementById('job-detail-account').textContent = account || 'N/A';
+            document.getElementById('job-detail-qos').textContent = qos || 'N/A';
             
             // 状态徽章
             const statusEl = document.getElementById('job-detail-status');
@@ -1020,30 +1135,134 @@
             // 资源信息
             const nodes = job.nodes || job.numnodes || job.allocnodes || '';
             const cpus = job.cpus || job.numcpus || job.reqcpus || '';
-            const memory = job.memory || job.reqmem || '';
+            const memory = job.memory || job.reqmem || job.mem || '';
             const gres = job.gres || job.reqgres || '';
             const nodelist = job.nodelist || job.allocated_nodes || job.allocnodes || job.nodelistex || '';
+            const gpus = job.gpus || '';
             
             document.getElementById('job-detail-nodes').textContent = nodes || 'N/A';
             document.getElementById('job-detail-cpus').textContent = cpus || 'N/A';
             document.getElementById('job-detail-memory').textContent = memory || 'N/A';
-            document.getElementById('job-detail-gpu').textContent = (gres && gres !== 'none') ? gres : '无';
+            // 优先显示解析后的 GPU 数量，否则显示原始 gres
+            if (gpus && gpus !== '0') {
+                document.getElementById('job-detail-gpu').textContent = gpus;
+            } else if (gres && gres !== 'none') {
+                document.getElementById('job-detail-gpu').textContent = gres;
+            } else {
+                document.getElementById('job-detail-gpu').textContent = '无';
+            }
             document.getElementById('job-detail-nodelist').textContent = nodelist || 'N/A';
             
             // 时间信息
             const submitTime = job.submit_time || job.submittime || '';
             const startTime = job.start_time || job.starttime || '';
-            const runTime = job.time || job.runtime || job.timelimit || '';
+            const endTime = job.end_time || job.endtime || '';
+            const runTime = job.time || job.runtime || '';
             const timeLeft = job.time_left || job.timeleft || '';
+            const elapsed = job.elapsed || '';
+            const timelimit = job.timelimit || '';
+            const waited = job.reserved || job.waited || '';
             
             document.getElementById('job-detail-submit').textContent = submitTime || 'N/A';
             document.getElementById('job-detail-start').textContent = startTime || '未开始';
-            document.getElementById('job-detail-time').textContent = runTime || 'N/A';
-            document.getElementById('job-detail-timeleft').textContent = timeLeft || 'N/A';
+            document.getElementById('job-detail-end').textContent = endTime || '--';
+            document.getElementById('job-detail-waited').textContent = waited || '--';
+            document.getElementById('job-detail-timelimit').textContent = timelimit || runTime || 'N/A';
+            document.getElementById('job-detail-elapsed').textContent = elapsed || runTime || 'N/A';
+            // 保留兼容旧字段
+            const timeEl = document.getElementById('job-detail-time');
+            if (timeEl) timeEl.textContent = runTime || elapsed || 'N/A';
+            const timeleftEl = document.getElementById('job-detail-timeleft');
+            if (timeleftEl) timeleftEl.textContent = timeLeft || 'N/A';
+            
+            // CPU 使用详情 (仅显示当有数据时)
+            const totalcpu = job.totalcpu || '';
+            const usercpu = job.usercpu || '';
+            const systemcpu = job.systemcpu || '';
+            const cpuEff = job.cpu_efficiency || '';
+            
+            const cpuSection = document.getElementById('job-detail-cpu-section');
+            if (totalcpu || usercpu || systemcpu) {
+                cpuSection.style.display = 'block';
+                document.getElementById('job-detail-totalcpu').textContent = totalcpu || '--';
+                document.getElementById('job-detail-usercpu').textContent = usercpu || '--';
+                document.getElementById('job-detail-systemcpu').textContent = systemcpu || '--';
+                document.getElementById('job-detail-cpueff').textContent = cpuEff || '--';
+            } else {
+                cpuSection.style.display = 'none';
+            }
+            
+            // 兼容历史任务数据格式（字段名可能不同）
+            // 历史任务使用: submit_time, start_time, end_time, elapsed, reqmem, maxrss, maxdiskwrite, maxdiskread
+            // 活跃作业使用: submit_time/starttime, time/time_left 等
+            
+            // 内存使用详情 (仅显示当有数据时)
+            const reqmem = job.reqmem || '';
+            const maxrss = job.maxrss || job.maxrss_live || '';
+            const memEff = job.mem_efficiency || '';
+            
+            console.log('Memory data:', { reqmem, maxrss, memEff });
+            
+            const memSection = document.getElementById('job-detail-mem-section');
+            // 只要有数据就显示，即使数据是 '-' 也显示（表示 sacct 返回了空值）
+            if (reqmem && reqmem !== '-' || maxrss && maxrss !== '-') {
+                memSection.style.display = 'block';
+                document.getElementById('job-detail-reqmem').textContent = reqmem || '--';
+                document.getElementById('job-detail-maxrss').textContent = maxrss || '--';
+                document.getElementById('job-detail-memeff').textContent = memEff || '--';
+            } else {
+                memSection.style.display = 'none';
+            }
+            
+            // 磁盘 I/O (仅显示当有数据时)
+            const diskwrite = job.maxdiskwrite || job.maxdiskwrite_live || '';
+            const diskread = job.maxdiskread || job.maxdiskread_live || '';
+            
+            console.log('Disk I/O data:', { diskwrite, diskread });
+            
+            const ioSection = document.getElementById('job-detail-io-section');
+            // 只要有数据就显示
+            if (diskwrite && diskwrite !== '-' || diskread && diskread !== '-') {
+                ioSection.style.display = 'block';
+                document.getElementById('job-detail-diskwrite').textContent = diskwrite || '--';
+                document.getElementById('job-detail-diskread').textContent = diskread || '--';
+            } else {
+                ioSection.style.display = 'none';
+            }
+            
+            // 退出状态 (仅完成作业显示)
+            const exitcode = job.exitcode || '';
+            const exitSection = document.getElementById('job-detail-exit-section');
+            if (exitcode && exitcode !== '0:0' && exitcode !== '--') {
+                exitSection.style.display = 'block';
+                document.getElementById('job-detail-exitcode').textContent = exitcode;
+            } else {
+                exitSection.style.display = 'none';
+            }
+            
+            // 等待原因 (仅待运行作业显示)
+            const reason = job.reason || '';
+            const reasonSection = document.getElementById('job-detail-reason-section');
+            if (reason && (state === 'PENDING' || state === 'PD')) {
+                reasonSection.style.display = 'block';
+                document.getElementById('job-detail-reason').textContent = reason;
+            } else {
+                reasonSection.style.display = 'none';
+            }
             
             // 工作目录
             const workDir = job.work_dir || job.workdir || '';
             document.getElementById('job-detail-workdir').textContent = workDir || 'N/A';
+            
+            // 提交命令 (如果有)
+            const submitline = job.submitline || '';
+            const cmdSection = document.getElementById('job-detail-command-section');
+            if (submitline) {
+                cmdSection.style.display = 'block';
+                document.getElementById('job-detail-command').textContent = submitline;
+            } else {
+                cmdSection.style.display = 'none';
+            }
             
             // 取消按钮显示/隐藏
             const cancelBtn = document.getElementById('job-detail-cancel-btn');
