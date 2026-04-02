@@ -14,6 +14,8 @@ import datetime
 import threading
 import time
 import uuid
+import socket
+import paramiko
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from flask import Flask, render_template, jsonify, request, Response, session, redirect, url_for
@@ -1304,6 +1306,36 @@ def disk_quota_page():
     """Disk Quota management page"""
     return render_template('disk_quota.html')
 
+
+@app.route('/terminal')
+def terminal_page():
+    """Terminal page for SSH to nodes"""
+    node = request.args.get('node', '')
+    return render_template('terminal.html', node=node)
+
+
+@app.route('/api/terminal/exec', methods=['POST'])
+def api_terminal_exec():
+    """Execute command on remote node via SSH"""
+    if 'user_type' not in session:
+        return jsonify({'success': False, 'message': '未登录'}), 401
+    
+    if session.get('user_type') != 'admin':
+        return jsonify({'success': False, 'message': '需要管理员权限'}), 403
+    
+    data = request.json
+    node = data.get('node', '')
+    command = data.get('command', '')
+    
+    if not node:
+        return jsonify({'success': False, 'message': '未指定节点'}), 400
+    
+    ssh_cmd = f"ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no {node} {command}"
+    result = run_command(ssh_cmd, timeout=30)
+    
+    return jsonify({'success': True, 'output': result})
+
+
 @app.route('/api/disk-quota')
 def api_disk_quota():
     """Get disk quota information"""
@@ -2148,6 +2180,156 @@ def handle_stop_monitoring():
     """Stop background monitoring"""
     updater.stop()
     emit('monitoring_stopped', {'status': 'stopped'})
+
+
+terminal_sessions = {}
+
+
+class SSHSession:
+    """SSH 会话管理类"""
+    def __init__(self, node):
+        self.node = node
+        self.ssh = None
+        self.channel = None
+        self.connected = False
+        
+    def connect(self, username=None):
+        """建立 SSH 连接"""
+        try:
+            self.ssh = paramiko.SSHClient()
+            self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            
+            connect_kwargs = {
+                'hostname': self.node,
+                'timeout': 10,
+                'allow_agent': True,
+                'look_for_keys': True
+            }
+            
+            if username:
+                connect_kwargs['username'] = username
+            else:
+                connect_kwargs['username'] = 'root'
+            
+            self.ssh.connect(**connect_kwargs)
+            self.channel = self.ssh.invoke_shell(term='xterm-256color', width=80, height=24)
+            self.connected = True
+            return True
+        except Exception as e:
+            print(f"SSH 连接失败: {e}")
+            return False
+    
+    def write(self, data):
+        """发送数据到 SSH 通道"""
+        print(f"SSH write: channel={self.channel is not None}, connected={self.connected}, data={repr(data)}")
+        if self.channel and self.connected:
+            try:
+                self.channel.send(data)
+                print("SSH write success")
+            except Exception as e:
+                print(f"SSH write error: {e}")
+    
+    def read(self, size=4096):
+        """从 SSH 通道读取数据"""
+        if self.channel and self.connected:
+            try:
+                if self.channel.recv_ready():
+                    data = self.channel.recv(size).decode('utf-8', errors='ignore')
+                    if data:
+                        print(f"SSH read: {repr(data[:100])}")
+                    return data
+            except Exception as e:
+                print(f"SSH read error: {e}")
+        return ''
+    
+    def resize(self, width, height):
+        """调整终端大小"""
+        if self.channel and self.connected:
+            try:
+                self.channel.resize(width=width, height=height)
+            except:
+                pass
+    
+    def close(self):
+        """关闭 SSH 连接"""
+        try:
+            if self.channel:
+                self.channel.close()
+            if self.ssh:
+                self.ssh.close()
+        except:
+            pass
+        self.connected = False
+
+
+@socketio.on('terminal_connect')
+def handle_terminal_connect(data):
+    """处理终端连接请求"""
+    if 'user_type' not in session:
+        emit('terminal_error', {'message': '未登录'}, namespace='/')
+        return
+    
+    if session.get('user_type') != 'admin':
+        emit('terminal_error', {'message': '需要管理员权限'}, namespace='/')
+        return
+    
+    node = data.get('node', '')
+    if not node:
+        emit('terminal_error', {'message': '未指定节点'}, namespace='/')
+        return
+    
+    sid = request.sid
+    
+    ssh_session = SSHSession(node)
+    if ssh_session.connect():
+        terminal_sessions[sid] = ssh_session
+        emit('terminal_connected', {'node': node}, namespace='/')
+        
+        # 使用 socketio 的 background task 替代 threading.Thread
+        def read_output(sid, ssh_session, socketio):
+            while sid in terminal_sessions:
+                try:
+                    data = ssh_session.read()
+                    if data:
+                        socketio.emit('terminal_data', {'data': data}, namespace='/', to=sid)
+                except Exception as e:
+                    print(f"Read output error: {e}")
+                    break
+                time.sleep(0.05)
+        
+        socketio.start_background_task(read_output, sid, ssh_session, socketio)
+    else:
+        emit('terminal_error', {'message': f'无法连接到节点 {node}'}, namespace='/')
+
+
+@socketio.on('terminal_input')
+def handle_terminal_input(data):
+    """处理终端输入"""
+    sid = request.sid
+    print(f"收到终端输入: {data}, sid: {sid}")
+    if sid in terminal_sessions:
+        terminal_sessions[sid].write(data.get('data', ''))
+
+
+@socketio.on('terminal_resize')
+def handle_terminal_resize(data):
+    """处理终端大小调整"""
+    sid = request.sid
+    if sid in terminal_sessions:
+        terminal_sessions[sid].resize(
+            data.get('width', 80),
+            data.get('height', 24)
+        )
+
+
+@socketio.on('terminal_disconnect')
+def handle_terminal_disconnect():
+    """处理终端断开"""
+    sid = request.sid
+    if sid in terminal_sessions:
+        terminal_sessions[sid].close()
+        del terminal_sessions[sid]
+        emit('terminal_disconnected', namespace='/')
 
 # ============== Main ==============
 

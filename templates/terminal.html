@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}终端 - {{ node }} - Slurm 集群监控系统{% endblock %}
+
+{% block content %}
+<style>
+#terminal-container { height: calc(100vh - 100px); }
+</style>
+
+<div class="p-4 h-screen flex flex-col">
+    <div class="mb-3 flex items-center justify-between">
+        <div>
+            <h1 class="text-xl font-bold text-slate-800">
+                <i class="fas fa-terminal text-primary-500 mr-2"></i>终端 - {{ node }}
+            </h1>
+        </div>
+        <div class="flex items-center gap-2">
+            <span id="connection-status" class="text-sm text-slate-500">
+                <i class="fas fa-circle text-yellow-500 mr-1"></i>连接中...
+            </span>
+            <button onclick="disconnectTerminal()" class="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded text-sm">
+                <i class="fas fa-times mr-1"></i>断开
+            </button>
+        </div>
+    </div>
+    
+    <div class="flex-1 bg-slate-900 rounded-lg overflow-hidden" id="terminal-container"></div>
+</div>
+
+<script>
+let term;
+let currentNode = '{{ node }}';
+let socket;
+
+function initTerminal() {
+    const container = document.getElementById('terminal-container');
+    term = new Terminal({
+        cursorBlink: true,
+        fontSize: 14,
+        fontFamily: 'Menlo, Monaco, Consolas, monospace',
+        theme: {
+            background: '#0f172a',
+            foreground: '#e2e8f0',
+            cursor: '#22c55e',
+            selection: 'rgba(34, 197, 94, 0.3)'
+        },
+        scrollback: 10000
+    });
+    
+    const fitAddon = new FitAddon.FitAddon();
+    const webLinksAddon = new WebLinksAddon.WebLinksAddon();
+    term.loadAddon(fitAddon);
+    term.loadAddon(webLinksAddon);
+    
+    term.open(container);
+    fitAddon.fit();
+    
+    term.writeln('\x1b[36m正在连接到节点: ' + currentNode + '...\x1b[0m');
+    
+    connectSocket();
+    
+    window.addEventListener('resize', () => fitAddon.fit());
+    
+    term.onData(data => {
+        console.log('Sending terminal input:', data);
+        if (socket) {
+            socket.emit('terminal_input', {data: data});
+        }
+    });
+    
+    term.onResize(({cols, rows}) => {
+        if (socket) {
+            socket.emit('terminal_resize', {width: cols, height: rows});
+        }
+    });
+}
+
+function connectSocket() {
+    socket = io();
+    
+    socket.on('connect', () => {
+        console.log('Socket connected, requesting terminal...');
+        socket.emit('terminal_connect', {node: currentNode});
+    });
+    
+    socket.on('terminal_connected', (data) => {
+        console.log('Terminal connected to:', data.node);
+        term.writeln('\x1b[32m✓ 连接成功\x1b[0m');
+        term.writeln('');
+        document.getElementById('connection-status').innerHTML = 
+            '<i class="fas fa-circle text-green-500 mr-1"></i>已连接';
+        
+        setTimeout(() => {
+            const fitAddon = term._addonManager.get('fit');
+            if (fitAddon) fitAddon.fit();
+        }, 200);
+    });
+    
+    socket.on('terminal_data', (data) => {
+        term.write(data.data);
+    });
+    
+    socket.on('terminal_error', (data) => {
+        term.writeln('\x1b[31m错误: ' + data.message + '\x1b[0m');
+        document.getElementById('connection-status').innerHTML = 
+            '<i class="fas fa-circle text-red-500 mr-1"></i>连接失败';
+    });
+    
+    socket.on('disconnect', () => {
+        term.writeln('\x1b[33m连接已断开\x1b[0m');
+        document.getElementById('connection-status').innerHTML = 
+            '<i class="fas fa-circle text-red-500 mr-1"></i>已断开';
+    });
+}
+
+function disconnectTerminal() {
+    if (socket && socket.connected) {
+        socket.emit('terminal_disconnect');
+    }
+    window.close();
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    initTerminal();
+});
+</script>
+{% endblock %}

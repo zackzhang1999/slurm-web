@@ -11,6 +11,12 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
+    <!-- Xterm.js for terminal -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
+    
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -797,9 +803,15 @@
                 </div>
                 <p id="node-detail-partition" class="text-slate-500">--</p>
             </div>
-            <button onclick="closeNodeDetail()" class="drawer-close">
-                <i class="fas fa-times text-lg"></i>
-            </button>
+            <div class="flex items-center gap-2">
+                <button id="open-terminal-btn" onclick="openTerminal()" 
+                        class="admin-only px-3 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors text-sm" style="display: none;">
+                    <i class="fas fa-terminal mr-1"></i>打开终端
+                </button>
+                <button onclick="closeNodeDetail()" class="drawer-close">
+                    <i class="fas fa-times text-lg"></i>
+                </button>
+            </div>
         </div>
         <div class="drawer-body">
             <!-- 基本信息 -->
@@ -1323,6 +1335,12 @@
             currentDetailNodeName = null;
         }
         
+        function openTerminal() {
+            if (currentDetailNodeName) {
+                window.open('/terminal?node=' + currentDetailNodeName, '_blank');
+            }
+        }
+        
         async function loadNodeDetailData(nodeName) {
             // 显示加载状态
             document.getElementById('node-detail-name').textContent = nodeName;
@@ -1573,9 +1591,12 @@
         
         // 检查用户登录状态并控制功能显示
         async function checkUserStatus() {
+            console.log('checkUserStatus 开始执行');
             try {
-                const response = await fetch('/api/current-user');
+                const response = await fetch('/api/current-user', {credentials: 'include'});
+                console.log('fetch 完成, status:', response.status);
                 const data = await response.json();
+                console.log('用户状态数据:', data);
                 
                 if (!data.logged_in) {
                     // 未登录，跳转到登录页
@@ -1624,7 +1645,7 @@
         // 登出
         async function logout() {
             try {
-                await fetch('/api/logout', {method: 'POST'});
+                await fetch('/api/logout', {method: 'POST', credentials: 'include'});
                 window.location.href = '/login';
             } catch (e) {
                 console.error('登出失败:', e);

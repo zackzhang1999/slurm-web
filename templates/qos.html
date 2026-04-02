@@ -612,6 +612,8 @@ async function viewQosDetail(name) {
         `;
         
         document.getElementById('detail-modal').classList.add('active');
+        
+        viewAssociations(name);
     } catch (error) {
         console.error('Error loading QOS detail:', error);
         alert('加载详情失败');
@@ -656,9 +658,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // 检查用户登录状态
 async function checkUserStatus() {
+    console.log('qos checkUserStatus 开始');
     try {
-        const response = await fetch('/api/current-user');
+        const response = await fetch('/api/current-user', {credentials: 'include'});
+        console.log('qos fetch 状态:', response.status);
         const data = await response.json();
+        console.log('qos 用户数据:', data);
         
         if (!data.logged_in) {
             window.location.href = '/login';

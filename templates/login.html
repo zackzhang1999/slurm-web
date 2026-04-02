@@ -206,7 +206,8 @@
                 const response = await fetch('/api/login', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({type: 'admin', password})
+                    body: JSON.stringify({type: 'admin', password}),
+                    credentials: 'include'
                 });
                 
                 const data = await response.json();
@@ -259,7 +260,8 @@
                         username,
                         password,
                         newPassword: isChangePassword ? newPassword : null
-                    })
+                    }),
+                    credentials: 'include'
                 });
                 
                 const data = await response.json();

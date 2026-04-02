@@ -772,7 +772,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // 检查用户登录状态
 async function checkUserStatus() {
     try {
-        const response = await fetch('/api/current-user');
+        const response = await fetch('/api/current-user', {credentials: 'include'});
         const data = await response.json();
         
         if (!data.logged_in) {

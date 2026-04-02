@@ -1063,6 +1063,47 @@ window.loadNodesData = function() { if (allData.nodes) loadNodesTable(allData.no
 
 // 作业管理页面
 let selectedJobs = new Set();
+
+// 翻译作业阻塞原因
+function translateJobReason(reason) {
+    if (!reason || reason === 'None' || reason === '-') return null;
+    
+    const reasonMap = {
+        'Resources': '资源不足',
+        'Priority': '优先级低',
+        'Dependency': '等待依赖作业完成',
+        'InvalidQOS': '无效的QOS配置',
+        'QOSGrpLimit': 'QOS组资源限制',
+        'QOSJobLimit': 'QOS作业数超限',
+        'QOSTimeLimit': 'QOS时间限制',
+        'AssocGrpLimit': '账户组资源限制',
+        'AssocJobLimit': '账户作业数超限',
+        'AssocTimeLimit': '账户时间限制',
+        'GrpJobs': '组作业数已达上限',
+        'GrpTRES': '组CPU/内存/GPU资源不足',
+        'GrpWall': '组运行时间已达上限',
+        'MaxJobsPerUser': '用户作业数已达上限',
+        'MaxTRESPerUser': '用户CPU/内存/GPU资源不足',
+        'MaxWallPerUser': '用户运行时间已达上限',
+        'NodeDown': '节点故障',
+        'BadConstraints': '约束条件不满足',
+        'PartitionTimeLimit': '分区时间限制',
+        'PartitionNodeLimit': '分区节点不足',
+        'JobArrayJobLimit': '作业数组超限',
+        'SystemFailure': '系统故障',
+        'FrontEnd': '前端节点不可用',
+        'BeginTime': '作业开始时间未到',
+        'NoSockets': '无可用CPU核心',
+        'NoGpus': '无可用GPU',
+        'NoMemory': '内存不足',
+        'PartitionBusy': '分区忙碌',
+        'PartitionDown': '分区已关闭',
+        'PartitionInDrain': '分区排空中'
+    };
+    
+    return reasonMap[reason] || reason;
+}
+
 // 分页相关状态
 let jobsPagination = {
     currentPage: 1,
@@ -1104,11 +1145,14 @@ function loadJobsTable(jobs) {
         const isSelected = selectedJobs.has(job.job_id);
         // Format reason: only show for pending jobs, hide for running/completed jobs
         let reason = '-';
+        let reasonCN = '-';
         if (job.state === 'PD' && job.reason && job.reason !== 'None') {
             reason = job.reason;
+            reasonCN = translateJobReason(job.reason) || job.reason;
         } else if (job.state !== 'R' && job.reason && job.reason !== 'None' && job.reason !== '-') {
             // For other non-running states, show reason if exists
             reason = job.reason;
+            reasonCN = translateJobReason(job.reason) || job.reason;
         }
         tbody.innerHTML += `<tr class="fade-in hover:bg-slate-50 transition-colors">
             <td class="px-4 py-3"><input type="checkbox" class="job-checkbox" value="${job.job_id}" ${isSelected ? 'checked' : ''} onchange="toggleJobSelection('${job.job_id}')"></td>
@@ -1123,7 +1167,7 @@ function loadJobsTable(jobs) {
             <td class="px-4 py-3">${job.user}</td>
             <td class="px-4 py-3">${job.partition}</td>
             <td class="px-4 py-3">${getStateBadge(job.state)}</td>
-            <td class="px-4 py-3 text-xs text-slate-500" title="${reason}">${reason}</td>
+            <td class="px-4 py-3 text-xs text-slate-500" title="${reason}">${reasonCN}</td>
             <td class="px-4 py-3">${job.nodes}</td>
             <td class="px-4 py-3">${job.cpus}</td>
             <td class="px-4 py-3">${job.memory}</td>
