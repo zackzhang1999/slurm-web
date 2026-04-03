@@ -1323,22 +1323,32 @@ def api_list_files():
         return jsonify({'success': False, 'message': '未登录'}), 401
     
     username = session.get('username')
+    user_type = session.get('user_type', 'user')
     request_path = request.args.get('path', '')
     
     if not username:
         return jsonify({'success': False, 'message': '无法获取用户信息'}), 400
     
-    user_home = os.path.join('/home', username)
-    
-    if request_path:
-        target_dir = os.path.join(user_home, request_path)
+    if user_type == 'admin':
+        base_dir = '/home'
+        if request_path:
+            target_dir = os.path.join(base_dir, request_path)
+        else:
+            target_dir = base_dir
+        
+        target_dir = os.path.abspath(target_dir)
+        if not target_dir.startswith(base_dir):
+            return jsonify({'success': False, 'message': '路径超出范围'}), 403
     else:
-        target_dir = user_home
-    
-    target_dir = os.path.abspath(target_dir)
-    
-    if not target_dir.startswith(user_home):
-        return jsonify({'success': False, 'message': '路径超出用户目录范围'}), 403
+        base_dir = os.path.join('/home', username)
+        if request_path:
+            target_dir = os.path.join(base_dir, request_path)
+        else:
+            target_dir = base_dir
+        
+        target_dir = os.path.abspath(target_dir)
+        if not target_dir.startswith(base_dir):
+            return jsonify({'success': False, 'message': '路径超出用户目录范围'}), 403
     
     if not os.path.exists(target_dir):
         return jsonify({'success': False, 'message': '目录不存在'}), 404
@@ -1359,7 +1369,7 @@ def api_list_files():
                 'is_dir': os.path.isdir(item_path),
                 'size': stat.st_size,
                 'modified': datetime.datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M'),
-                'path': os.path.relpath(item_path, user_home)
+                'path': os.path.relpath(item_path, base_dir)
             })
         
         current_path = request_path if request_path else ''
@@ -1370,7 +1380,8 @@ def api_list_files():
             'files': files,
             'current_path': current_path,
             'parent_path': parent_path,
-            'user_home': user_home
+            'base_dir': base_dir,
+            'user_type': user_type
         })
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -1383,13 +1394,19 @@ def api_delete_file():
         return jsonify({'success': False, 'message': '未登录'}), 401
     
     username = session.get('username')
+    user_type = session.get('user_type', 'user')
     data = request.json
     file_path = data.get('path', '')
+    base_dir = data.get('base_dir', '')
     
     if not username or not file_path:
         return jsonify({'success': False, 'message': '参数不完整'}), 400
     
-    user_home = os.path.join('/home', username)
+    if user_type == 'admin' and base_dir:
+        user_home = '/home'
+    else:
+        user_home = os.path.join('/home', username)
+    
     target_path = os.path.join(user_home, file_path)
     target_path = os.path.abspath(target_path)
     
@@ -1416,12 +1433,18 @@ def api_upload_file():
         return jsonify({'success': False, 'message': '未登录'}), 401
     
     username = session.get('username')
+    user_type = session.get('user_type', 'user')
     target_path = request.form.get('path', '')
+    base_dir = request.form.get('base_dir', '')
     
     if not username:
         return jsonify({'success': False, 'message': '无法获取用户信息'}), 400
     
-    user_home = os.path.join('/home', username)
+    if user_type == 'admin' and base_dir:
+        user_home = '/home'
+    else:
+        user_home = os.path.join('/home', username)
+    
     upload_dir = os.path.join(user_home, target_path) if target_path else user_home
     upload_dir = os.path.abspath(upload_dir)
     
@@ -1450,12 +1473,18 @@ def api_download_file():
         return jsonify({'success': False, 'message': '未登录'}), 401
     
     username = session.get('username')
+    user_type = session.get('user_type', 'user')
     file_path = request.args.get('path', '')
+    base_dir = request.args.get('base_dir', '')
     
     if not username or not file_path:
         return jsonify({'success': False, 'message': '参数不完整'}), 400
     
-    user_home = os.path.join('/home', username)
+    if user_type == 'admin' and base_dir:
+        user_home = '/home'
+    else:
+        user_home = os.path.join('/home', username)
+    
     target_path = os.path.join(user_home, file_path)
     target_path = os.path.abspath(target_path)
     
@@ -1481,12 +1510,18 @@ def api_view_file():
         return jsonify({'success': False, 'message': '未登录'}), 401
     
     username = session.get('username')
+    user_type = session.get('user_type', 'user')
     file_path = request.args.get('path', '')
+    base_dir = request.args.get('base_dir', '')
     
     if not username or not file_path:
         return jsonify({'success': False, 'message': '参数不完整'}), 400
     
-    user_home = os.path.join('/home', username)
+    if user_type == 'admin' and base_dir:
+        user_home = '/home'
+    else:
+        user_home = os.path.join('/home', username)
+    
     target_path = os.path.join(user_home, file_path)
     target_path = os.path.abspath(target_path)
     

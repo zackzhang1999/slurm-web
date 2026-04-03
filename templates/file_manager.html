@@ -18,6 +18,14 @@
         </div>
     </div>
     
+    <!-- 目录选择器（管理员） -->
+    <div id="admin-dir-selector" class="hidden mb-4 flex items-center gap-4 bg-white rounded-lg px-4 py-3 shadow-sm border border-slate-200">
+        <span class="text-sm font-medium text-slate-600">浏览目录:</span>
+        <select id="dir-select" onchange="changeBaseDir(this.value)" class="px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:border-primary-500">
+            <option value="/home">/home (所有用户)</option>
+        </select>
+    </div>
+    
     <!-- 路径导航 -->
     <div class="mb-4 flex items-center gap-2 bg-white rounded-lg px-4 py-2 shadow-sm border border-slate-200 overflow-x-auto">
         <i class="fas fa-folder text-yellow-500 flex-shrink-0"></i>
@@ -60,6 +68,8 @@
 
 <script>
 let currentPath = '';
+let baseDir = '';
+let isAdmin = false;
 
 function formatSize(bytes) {
     if (bytes === 0) return '0 B';
@@ -94,7 +104,11 @@ function getFileIcon(file) {
 }
 
 async function loadFiles() {
-    const url = '/api/files' + (currentPath ? '?path=' + encodeURIComponent(currentPath) : '');
+    let url = '/api/files';
+    const params = new URLSearchParams();
+    if (currentPath) params.append('path', currentPath);
+    if (isAdmin && baseDir) params.append('base_dir', baseDir);
+    if (params.toString()) url += '?' + params.toString();
     
     try {
         const response = await fetch(url, {credentials: 'include'});
@@ -106,11 +120,25 @@ async function loadFiles() {
             return;
         }
         
+        isAdmin = data.user_type === 'admin';
+        if (isAdmin) {
+            document.getElementById('admin-dir-selector').classList.remove('hidden');
+            const select = document.getElementById('dir-select');
+            select.value = baseDir || (data.base_dir || '/home');
+            baseDir = select.value;
+        }
+        
         renderFileList(data);
     } catch (error) {
         document.getElementById('file-list').innerHTML = 
             `<tr><td colspan="4" class="px-6 py-8 text-center text-red-500">加载失败: ${error.message}</td></tr>`;
     }
+}
+
+function changeBaseDir(dir) {
+    baseDir = dir;
+    currentPath = '';
+    loadFiles();
 }
 
 function renderFileList(data) {
@@ -227,12 +255,16 @@ function goToParent() {
 }
 
 function downloadFile(path) {
-    window.location.href = '/api/files/download?path=' + encodeURIComponent(path);
+    let url = '/api/files/download?path=' + encodeURIComponent(path);
+    if (isAdmin && baseDir) url += '&base_dir=' + encodeURIComponent(baseDir);
+    window.location.href = url;
 }
 
 async function viewFile(path) {
+    let url = '/api/files/view?path=' + encodeURIComponent(path);
+    if (isAdmin && baseDir) url += '&base_dir=' + encodeURIComponent(baseDir);
     try {
-        const response = await fetch('/api/files/view?path=' + encodeURIComponent(path), {credentials: 'include'});
+        const response = await fetch(url, {credentials: 'include'});
         const data = await response.json();
         
         if (!data.success) {
@@ -273,12 +305,15 @@ async function deleteFile(path, isDir) {
     const confirmMsg = isDir ? '确定要删除这个文件夹及其所有内容吗？' : '确定要删除这个文件吗？';
     if (!confirm(confirmMsg)) return;
     
+    const body = {path: path};
+    if (isAdmin && baseDir) body.base_dir = baseDir;
+    
     try {
         const response = await fetch('/api/files/delete', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             credentials: 'include',
-            body: JSON.stringify({path: path})
+            body: JSON.stringify(body)
         });
         
         const data = await response.json();
@@ -299,6 +334,7 @@ function handleUpload(input) {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('path', currentPath);
+    if (isAdmin && baseDir) formData.append('base_dir', baseDir);
     
     const progressEl = document.getElementById('upload-progress');
     progressEl.classList.remove('hidden');
