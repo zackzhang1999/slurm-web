@@ -16,9 +16,10 @@ import time
 import uuid
 import socket
 import paramiko
+import shutil
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from flask import Flask, render_template, jsonify, request, Response, session, redirect, url_for
+from flask import Flask, render_template, jsonify, request, Response, session, redirect, url_for, send_file as flask_send_file
 from flask_socketio import SocketIO, emit
 
 app = Flask(__name__)
@@ -137,7 +138,7 @@ def api_login():
             return jsonify({'success': False, 'message': '请输入用户名'})
         
         # 从 Slurm 获取用户列表
-        output = run_command("sacctmgr -n list user format=user 2>/dev/null")
+        output = run_command("sacctmgr -n list user format=user%20 2>/dev/null")
         slurm_users = []
         if output and not output.startswith("Error"):
             slurm_users = [line.strip() for line in output.strip().split('\n') if line.strip()]
@@ -186,7 +187,7 @@ def api_check_first_login():
         return jsonify({'firstLogin': False})
     
     # 从 Slurm 获取用户列表
-    output = run_command("sacctmgr -n list user format=user 2>/dev/null")
+    output = run_command("sacctmgr -n list user format=user%20 2>/dev/null")
     slurm_users = []
     if output and not output.startswith("Error"):
         slurm_users = [line.strip() for line in output.strip().split('\n') if line.strip()]
@@ -705,18 +706,18 @@ def parse_nvidia_smi_from_node(node_name):
     
     gpus = []
     
-    # If full query fails, try basic query
+    # If full query fails, try basic query with power
     if not output or output.startswith("Error") or "Segmentation" in output or "command not found" in output.lower():
         output = run_ssh_command(
             node_name,
             "nvidia-smi --query-gpu=index,name,temperature.gpu,utilization.gpu,"
-            "memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null"
+            "memory.used,memory.total,power.draw --format=csv,noheader,nounits 2>/dev/null"
         )
         if output and not output.startswith("Error"):
             lines = output.strip().split('\n')
             for line in lines:
                 parts = [p.strip() for p in line.split(',')]
-                if len(parts) >= 6:
+                if len(parts) >= 7:
                     gpus.append({
                         'index': parts[0],
                         'name': parts[1],
@@ -724,7 +725,7 @@ def parse_nvidia_smi_from_node(node_name):
                         'utilization': parts[3],
                         'memory_used': parts[4],
                         'memory_total': parts[5],
-                        'power_draw': 'N/A',
+                        'power_draw': parts[6] if len(parts) > 6 and parts[6] else 'N/A',
                         'power_limit': 'N/A',
                         'persistence_mode': 'N/A',
                         'ecc_mode': 'N/A',
@@ -779,18 +780,18 @@ def parse_nvidia_smi():
             "--format=csv,noheader,nounits 2>/dev/null"
         )
         
-        # If full query fails, try basic query
+        # If full query fails, try basic query with power
         if not output or output.startswith("Error") or "Segmentation" in output:
             output = run_command(
                 "nvidia-smi --query-gpu=index,name,temperature.gpu,utilization.gpu,"
-                "memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null"
+                "memory.used,memory.total,power.draw --format=csv,noheader,nounits 2>/dev/null"
             )
             gpus = []
             if output and not output.startswith("Error"):
                 lines = output.strip().split('\n')
                 for line in lines:
                     parts = [p.strip() for p in line.split(',')]
-                    if len(parts) >= 6:
+                    if len(parts) >= 7:
                         gpus.append({
                             'index': parts[0],
                             'name': parts[1],
@@ -798,7 +799,7 @@ def parse_nvidia_smi():
                             'utilization': parts[3],
                             'memory_used': parts[4],
                             'memory_total': parts[5],
-                            'power_draw': 'N/A',
+                            'power_draw': parts[6] if len(parts) > 6 and parts[6] else 'N/A',
                             'power_limit': 'N/A',
                             'persistence_mode': 'N/A',
                             'ecc_mode': 'N/A',
@@ -1305,6 +1306,209 @@ def index():
 def disk_quota_page():
     """Disk Quota management page"""
     return render_template('disk_quota.html')
+
+
+@app.route('/file-manager')
+def file_manager_page():
+    """File Manager page"""
+    if 'user_type' not in session:
+        return redirect('/login')
+    return render_template('file_manager.html')
+
+
+@app.route('/api/files')
+def api_list_files():
+    """List files in user's home directory"""
+    if 'user_type' not in session:
+        return jsonify({'success': False, 'message': '未登录'}), 401
+    
+    username = session.get('username')
+    request_path = request.args.get('path', '')
+    
+    if not username:
+        return jsonify({'success': False, 'message': '无法获取用户信息'}), 400
+    
+    user_home = os.path.join('/home', username)
+    
+    if request_path:
+        target_dir = os.path.join(user_home, request_path)
+    else:
+        target_dir = user_home
+    
+    target_dir = os.path.abspath(target_dir)
+    
+    if not target_dir.startswith(user_home):
+        return jsonify({'success': False, 'message': '路径超出用户目录范围'}), 403
+    
+    if not os.path.exists(target_dir):
+        return jsonify({'success': False, 'message': '目录不存在'}), 404
+    
+    if not os.path.isdir(target_dir):
+        return jsonify({'success': False, 'message': '路径不是目录'}), 400
+    
+    try:
+        files = []
+        items = sorted(os.listdir(target_dir), key=lambda x: (not os.path.isdir(os.path.join(target_dir, x)), x.lower()))
+        
+        for item in items:
+            item_path = os.path.join(target_dir, item)
+            stat = os.stat(item_path)
+            
+            files.append({
+                'name': item,
+                'is_dir': os.path.isdir(item_path),
+                'size': stat.st_size,
+                'modified': datetime.datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M'),
+                'path': os.path.relpath(item_path, user_home)
+            })
+        
+        current_path = request_path if request_path else ''
+        parent_path = os.path.dirname(current_path) if current_path else None
+        
+        return jsonify({
+            'success': True,
+            'files': files,
+            'current_path': current_path,
+            'parent_path': parent_path,
+            'user_home': user_home
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/files/delete', methods=['POST'])
+def api_delete_file():
+    """Delete file or directory"""
+    if 'user_type' not in session:
+        return jsonify({'success': False, 'message': '未登录'}), 401
+    
+    username = session.get('username')
+    data = request.json
+    file_path = data.get('path', '')
+    
+    if not username or not file_path:
+        return jsonify({'success': False, 'message': '参数不完整'}), 400
+    
+    user_home = os.path.join('/home', username)
+    target_path = os.path.join(user_home, file_path)
+    target_path = os.path.abspath(target_path)
+    
+    if not target_path.startswith(user_home):
+        return jsonify({'success': False, 'message': '路径超出用户目录范围'}), 403
+    
+    if not os.path.exists(target_path):
+        return jsonify({'success': False, 'message': '文件不存在'}), 404
+    
+    try:
+        if os.path.isdir(target_path):
+            shutil.rmtree(target_path)
+        else:
+            os.remove(target_path)
+        return jsonify({'success': True, 'message': '删除成功'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/files/upload', methods=['POST'])
+def api_upload_file():
+    """Upload file to user's home directory"""
+    if 'user_type' not in session:
+        return jsonify({'success': False, 'message': '未登录'}), 401
+    
+    username = session.get('username')
+    target_path = request.form.get('path', '')
+    
+    if not username:
+        return jsonify({'success': False, 'message': '无法获取用户信息'}), 400
+    
+    user_home = os.path.join('/home', username)
+    upload_dir = os.path.join(user_home, target_path) if target_path else user_home
+    upload_dir = os.path.abspath(upload_dir)
+    
+    if not upload_dir.startswith(user_home):
+        return jsonify({'success': False, 'message': '路径超出用户目录范围'}), 403
+    
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'message': '没有文件'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'message': '文件名不能为空'}), 400
+    
+    try:
+        file_path = os.path.join(upload_dir, file.filename)
+        file.save(file_path)
+        return jsonify({'success': True, 'message': '上传成功'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/files/download')
+def api_download_file():
+    """Download file from user's home directory"""
+    if 'user_type' not in session:
+        return jsonify({'success': False, 'message': '未登录'}), 401
+    
+    username = session.get('username')
+    file_path = request.args.get('path', '')
+    
+    if not username or not file_path:
+        return jsonify({'success': False, 'message': '参数不完整'}), 400
+    
+    user_home = os.path.join('/home', username)
+    target_path = os.path.join(user_home, file_path)
+    target_path = os.path.abspath(target_path)
+    
+    if not target_path.startswith(user_home):
+        return jsonify({'success': False, 'message': '路径超出用户目录范围'}), 403
+    
+    if not os.path.exists(target_path):
+        return jsonify({'success': False, 'message': '文件不存在'}), 404
+    
+    if os.path.isdir(target_path):
+        return jsonify({'success': False, 'message': '不能下载目录'}), 400
+    
+    try:
+        return flask_send_file(target_path, as_attachment=True)
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/files/view')
+def api_view_file():
+    """View file content"""
+    if 'user_type' not in session:
+        return jsonify({'success': False, 'message': '未登录'}), 401
+    
+    username = session.get('username')
+    file_path = request.args.get('path', '')
+    
+    if not username or not file_path:
+        return jsonify({'success': False, 'message': '参数不完整'}), 400
+    
+    user_home = os.path.join('/home', username)
+    target_path = os.path.join(user_home, file_path)
+    target_path = os.path.abspath(target_path)
+    
+    if not target_path.startswith(user_home):
+        return jsonify({'success': False, 'message': '路径超出用户目录范围'}), 403
+    
+    if not os.path.exists(target_path):
+        return jsonify({'success': False, 'message': '文件不存在'}), 404
+    
+    if os.path.isdir(target_path):
+        return jsonify({'success': False, 'message': '不能查看目录'}), 400
+    
+    file_size = os.path.getsize(target_path)
+    if file_size > 1024 * 1024:
+        return jsonify({'success': False, 'message': '文件太大，无法预览（最大1MB）'}), 400
+    
+    try:
+        with open(target_path, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+        return jsonify({'success': True, 'content': content, 'name': os.path.basename(target_path)})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 
 @app.route('/terminal')

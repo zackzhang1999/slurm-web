@@ -438,6 +438,12 @@
                         </a>
                     </li>
                     <li>
+                        <a href="/file-manager" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">
+                            <i class="fas fa-folder-open w-5"></i>
+                            文件管理
+                        </a>
+                    </li>
+                    <li>
                         <a href="/disk-quota" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900">
                             <i class="fas fa-hdd w-5"></i>
                             磁盘配额
@@ -1342,9 +1348,8 @@
         }
         
         async function loadNodeDetailData(nodeName) {
-            // 显示加载状态
+            // 显示节点名
             document.getElementById('node-detail-name').textContent = nodeName;
-            document.getElementById('node-detail-partition').textContent = '加载中...';
             
             console.log('Loading node detail for:', nodeName);
             
@@ -1366,12 +1371,9 @@
                     renderNodeDetail({...node, ...detail});
                 } else if (node) {
                     renderNodeDetail(node);
-                } else {
-                    document.getElementById('node-detail-partition').textContent = '节点信息不可用';
                 }
             } catch (e) {
                 console.error('Failed to load node detail:', e);
-                document.getElementById('node-detail-partition').textContent = '加载失败: ' + e.message;
             }
         }
         

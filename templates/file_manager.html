@@ -1,0 +1,331 @@
+{% extends "base.html" %}
+
+{% block title %}文件管理 - Slurm 集群监控系统{% endblock %}
+
+{% block content %}
+<div class="p-6">
+    <div class="mb-6 flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-800">
+                <i class="fas fa-folder-open text-primary-500 mr-2"></i>文件管理
+            </h1>
+            <p class="text-slate-500 mt-1">管理您的个人文件</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <button onclick="goToParent()" id="parent-btn" class="hidden px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors">
+                <i class="fas fa-arrow-up mr-2"></i>返回上级
+            </button>
+        </div>
+    </div>
+    
+    <!-- 路径导航 -->
+    <div class="mb-4 flex items-center gap-2 bg-white rounded-lg px-4 py-2 shadow-sm border border-slate-200 overflow-x-auto">
+        <i class="fas fa-folder text-yellow-500 flex-shrink-0"></i>
+        <div id="path-navigation" class="flex items-center gap-1 flex-shrink-0">
+            <span class="text-slate-700 font-medium cursor-pointer hover:text-primary-500" onclick="navigateTo('')">/</span>
+        </div>
+    </div>
+    
+    <!-- 操作栏 -->
+    <div class="mb-4 flex items-center gap-4">
+        <label class="flex items-center gap-2 px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg cursor-pointer transition-colors">
+            <i class="fas fa-upload"></i>
+            上传文件
+            <input type="file" id="file-input" class="hidden" onchange="handleUpload(this)">
+        </label>
+        <div id="upload-progress" class="hidden text-sm text-slate-500">
+            上传中...
+        </div>
+    </div>
+    
+    <!-- 文件列表 -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <table class="w-full">
+            <thead class="bg-slate-50 border-b border-slate-200">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">名称</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">大小</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">修改时间</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">操作</th>
+                </tr>
+            </thead>
+            <tbody id="file-list" class="divide-y divide-slate-200">
+                <tr>
+                    <td colspan="4" class="px-6 py-8 text-center text-slate-500">加载中...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+let currentPath = '';
+
+function formatSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return (bytes / Math.pow(1024, i)).toFixed(2) + ' ' + units[i];
+}
+
+function getFileIcon(file) {
+    if (file.is_dir) {
+        return '<i class="fas fa-folder text-yellow-500"></i>';
+    }
+    const ext = file.name.split('.').pop().toLowerCase();
+    const iconMap = {
+        'jpg': 'fa-file-image text-pink-500',
+        'jpeg': 'fa-file-image text-pink-500',
+        'png': 'fa-file-image text-pink-500',
+        'gif': 'fa-file-image text-pink-500',
+        'pdf': 'fa-file-pdf text-red-500',
+        'doc': 'fa-file-word text-blue-500',
+        'docx': 'fa-file-word text-blue-500',
+        'xls': 'fa-file-excel text-green-500',
+        'xlsx': 'fa-file-excel text-green-500',
+        'txt': 'fa-file-alt text-slate-500',
+        'log': 'fa-file-alt text-slate-500',
+        'py': 'fa-file-code text-purple-500',
+        'js': 'fa-file-code text-purple-500',
+        'sh': 'fa-file-code text-purple-500'
+    };
+    const icon = iconMap[ext] || 'fa-file text-slate-400';
+    return `<i class="fas ${icon}"></i>`;
+}
+
+async function loadFiles() {
+    const url = '/api/files' + (currentPath ? '?path=' + encodeURIComponent(currentPath) : '');
+    
+    try {
+        const response = await fetch(url, {credentials: 'include'});
+        const data = await response.json();
+        
+        if (!data.success) {
+            document.getElementById('file-list').innerHTML = 
+                `<tr><td colspan="4" class="px-6 py-8 text-center text-red-500">${data.message}</td></tr>`;
+            return;
+        }
+        
+        renderFileList(data);
+    } catch (error) {
+        document.getElementById('file-list').innerHTML = 
+            `<tr><td colspan="4" class="px-6 py-8 text-center text-red-500">加载失败: ${error.message}</td></tr>`;
+    }
+}
+
+function renderFileList(data) {
+    const files = data.files;
+    const tbody = document.getElementById('file-list');
+    
+    document.getElementById('parent-btn').classList.toggle('hidden', !data.parent_path);
+    
+    const pathNav = document.getElementById('path-navigation');
+    pathNav.innerHTML = '';
+    
+    const parts = (data.current_path || '').split('/').filter(p => p);
+    let currentPathAcc = '';
+    
+    const rootSpan = document.createElement('span');
+    rootSpan.className = 'text-slate-700 font-medium cursor-pointer hover:text-primary-500';
+    rootSpan.textContent = '/';
+    rootSpan.onclick = () => navigateTo('');
+    pathNav.appendChild(rootSpan);
+    
+    parts.forEach(part => {
+        currentPathAcc += part;
+        
+        const sep = document.createElement('span');
+        sep.className = 'text-slate-400';
+        sep.textContent = ' / ';
+        pathNav.appendChild(sep);
+        
+        const partSpan = document.createElement('span');
+        partSpan.className = 'text-slate-700 font-medium cursor-pointer hover:text-primary-500';
+        partSpan.textContent = part;
+        partSpan.onclick = () => navigateTo(currentPathAcc);
+        pathNav.appendChild(partSpan);
+        
+        currentPathAcc += '/';
+    });
+    
+    if (files.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-8 text-center text-slate-500">目录为空</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = '';
+    files.forEach(file => {
+        const row = document.createElement('tr');
+        row.className = 'hover:bg-slate-50 transition-colors';
+        
+        const nameCell = document.createElement('td');
+        nameCell.className = 'px-6 py-4';
+        nameCell.innerHTML = `
+            <div class="flex items-center gap-3">
+                ${getFileIcon(file)}
+                <span class="font-medium text-slate-800 cursor-pointer ${file.is_dir ? 'text-primary-600 hover:underline' : ''}">${file.name}</span>
+            </div>
+        `;
+        if (!file.is_dir) {
+            nameCell.querySelector('span').onclick = () => viewFile(file.path);
+        } else {
+            nameCell.querySelector('span').onclick = () => navigateTo(file.path);
+        }
+        
+        const sizeCell = document.createElement('td');
+        sizeCell.className = 'px-6 py-4 text-slate-500';
+        sizeCell.textContent = file.is_dir ? '--' : formatSize(file.size);
+        
+        const dateCell = document.createElement('td');
+        dateCell.className = 'px-6 py-4 text-slate-500';
+        dateCell.textContent = file.modified;
+        
+        const actionCell = document.createElement('td');
+        actionCell.className = 'px-6 py-4 text-right';
+        if (!file.is_dir) {
+            actionCell.innerHTML = `
+                <div class="flex items-center justify-end gap-2">
+                    <button onclick="viewFile('${file.path.replace(/'/g, "\\'")}')" class="p-2 text-slate-400 hover:text-blue-500 transition-colors" title="查看">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button onclick="downloadFile('${file.path.replace(/'/g, "\\'")}')" class="p-2 text-slate-400 hover:text-primary-500 transition-colors" title="下载">
+                        <i class="fas fa-download"></i>
+                    </button>
+                    <button onclick="deleteFile('${file.path.replace(/'/g, "\\'")}', false)" class="p-2 text-slate-400 hover:text-red-500 transition-colors" title="删除">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `;
+        } else {
+            actionCell.innerHTML = `
+                <div class="flex items-center justify-end gap-2">
+                    <button onclick="deleteFile('${file.path.replace(/'/g, "\\'")}', true)" class="p-2 text-slate-400 hover:text-red-500 transition-colors" title="删除">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `;
+        }
+        
+        row.appendChild(nameCell);
+        row.appendChild(sizeCell);
+        row.appendChild(dateCell);
+        row.appendChild(actionCell);
+        tbody.appendChild(row);
+    });
+}
+
+function navigateTo(path) {
+    currentPath = path;
+    loadFiles();
+}
+
+function goToParent() {
+    const pathParts = currentPath.split('/');
+    pathParts.pop();
+    currentPath = pathParts.join('/');
+    loadFiles();
+}
+
+function downloadFile(path) {
+    window.location.href = '/api/files/download?path=' + encodeURIComponent(path);
+}
+
+async function viewFile(path) {
+    try {
+        const response = await fetch('/api/files/view?path=' + encodeURIComponent(path), {credentials: 'include'});
+        const data = await response.json();
+        
+        if (!data.success) {
+            alert(data.message);
+            return;
+        }
+        
+        const content = data.content || '';
+        const modalHtml = `
+            <div id="file-viewer-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onclick="closeFileViewer(event)">
+                <div class="bg-white rounded-lg w-11/12 h-5/6 max-w-5xl flex flex-col" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+                        <h3 class="text-lg font-semibold text-slate-800">${data.name}</h3>
+                        <button onclick="closeFileViewer()" class="text-slate-400 hover:text-slate-600">
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
+                    </div>
+                    <div class="flex-1 overflow-auto p-6 bg-slate-900">
+                        <pre class="text-slate-200 font-mono text-sm whitespace-pre-wrap">${content.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    } catch (error) {
+        alert('加载失败: ' + error.message);
+    }
+}
+
+function closeFileViewer(event) {
+    if (event && event.target !== event.currentTarget) return;
+    const modal = document.getElementById('file-viewer-modal');
+    if (modal) modal.remove();
+}
+
+async function deleteFile(path, isDir) {
+    const confirmMsg = isDir ? '确定要删除这个文件夹及其所有内容吗？' : '确定要删除这个文件吗？';
+    if (!confirm(confirmMsg)) return;
+    
+    try {
+        const response = await fetch('/api/files/delete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            credentials: 'include',
+            body: JSON.stringify({path: path})
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            loadFiles();
+        } else {
+            alert('删除失败: ' + data.message);
+        }
+    } catch (error) {
+        alert('删除失败: ' + error.message);
+    }
+}
+
+function handleUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('path', currentPath);
+    
+    const progressEl = document.getElementById('upload-progress');
+    progressEl.classList.remove('hidden');
+    progressEl.textContent = '上传中...';
+    
+    fetch('/api/files/upload', {
+        method: 'POST',
+        credentials: 'include',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        progressEl.classList.add('hidden');
+        if (data.success) {
+            loadFiles();
+        } else {
+            alert('上传失败: ' + data.message);
+        }
+    })
+    .catch(error => {
+        progressEl.classList.add('hidden');
+        alert('上传失败: ' + error.message);
+    });
+    
+    input.value = '';
+}
+
+document.addEventListener('DOMContentLoaded', loadFiles);
+</script>
+{% endblock %}
