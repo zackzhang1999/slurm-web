@@ -647,15 +647,118 @@
         .page-content {
             min-height: calc(100vh - 4rem);
         }
+        
+        /* 移动端侧边栏遮罩 */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.5);
+            backdrop-filter: blur(4px);
+            z-index: 40;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .sidebar-overlay.active {
+            display: block;
+            opacity: 1;
+        }
+        
+        /* 移动端响应式样式 */
+        @media (max-width: 1023px) {
+            /* 侧边栏改为抽屉式 */
+            aside {
+                position: fixed !important;
+                left: 0;
+                top: 0;
+                height: 100vh;
+                z-index: 50;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+                box-shadow: 4px 0 24px rgba(0,0,0,0.1);
+            }
+            aside.active {
+                transform: translateX(0);
+            }
+            
+            /* 主内容区全宽 */
+            main {
+                margin-left: 0 !important;
+            }
+            
+            /* 顶部栏调整 */
+            header .px-8 {
+                padding-left: 1rem !important;
+                padding-right: 1rem !important;
+            }
+            
+            /* 页面内容 padding 调整 */
+            .page-content {
+                padding: 1rem !important;
+            }
+            
+            /* 隐藏副标题 */
+            header p {
+                display: none;
+            }
+            
+            /* 标题字号调整 */
+            header h2 {
+                font-size: 1.125rem;
+            }
+        }
+        
+        /* 触摸优化 */
+        @media (max-width: 768px) {
+            .sidebar-link {
+                padding: 14px 16px;
+                min-height: 48px;
+            }
+            
+            /* 按钮触摸区域 */
+            button, .sidebar-link, [onclick] {
+                min-height: 44px;
+                min-width: 44px;
+            }
+            
+            /* 表格横向滚动 */
+            .overflow-x-auto {
+                -webkit-overflow-scrolling: touch;
+            }
+        }
+        
+        /* 汉堡菜单按钮 */
+        .menu-btn {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            color: #64748b;
+            transition: all 0.2s;
+        }
+        .menu-btn:hover {
+            background: #f1f5f9;
+            color: #334155;
+        }
+        @media (max-width: 1023px) {
+            .menu-btn {
+                display: flex;
+            }
+        }
     </style>
     
     {% block extra_css %}{% endblock %}
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans antialiased">
     
+    <!-- 移动端侧边栏遮罩 -->
+    <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+    
     <div class="flex h-screen overflow-hidden">
         <!-- 侧边栏 -->
-        <aside class="w-64 bg-white border-r border-slate-200 flex flex-col">
+        <aside id="sidebar" class="w-64 bg-white border-r border-slate-200 flex flex-col">
             <!-- Logo -->
             <div class="h-16 flex items-center px-6 border-b border-slate-200">
                 <div class="flex items-center gap-3">
@@ -796,12 +899,18 @@
             <!-- 顶部栏 -->
             <header class="glass sticky top-0 z-30 border-b border-slate-200">
                 <div class="flex items-center justify-between px-8 h-16">
-                    <div>
-                        <h2 class="text-xl font-semibold text-slate-800">{% block page_title %}仪表盘{% endblock %}</h2>
-                        <p class="text-sm text-slate-500">{% block page_subtitle %}集群概览与实时监控{% endblock %}</p>
+                    <div class="flex items-center gap-3">
+                        <!-- 移动端汉堡菜单按钮 -->
+                        <button class="menu-btn lg:hidden" onclick="toggleSidebar()" title="打开菜单">
+                            <i class="fas fa-bars text-lg"></i>
+                        </button>
+                        <div>
+                            <h2 class="text-xl font-semibold text-slate-800">{% block page_title %}仪表盘{% endblock %}</h2>
+                            <p class="text-sm text-slate-500 hidden md:block">{% block page_subtitle %}集群概览与实时监控{% endblock %}</p>
+                        </div>
                     </div>
                     <div class="flex items-center gap-4">
-                        <span class="text-sm text-slate-500" id="current-time"></span>
+                        <span class="text-sm text-slate-500 hidden sm:block" id="current-time"></span>
                         <button onclick="refreshData()" class="p-2 text-slate-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="刷新数据">
                             <i class="fas fa-sync-alt"></i>
                         </button>
@@ -1867,6 +1976,53 @@
             const [className, label] = stateMap[state] || ['badge-primary', state];
             return `<span class="badge ${className}">${label}</span>`;
         }
+        
+        // 移动端侧边栏控制
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.querySelector('.sidebar-overlay');
+            
+            if (sidebar.classList.contains('active')) {
+                sidebar.classList.remove('active');
+                overlay.classList.remove('active');
+                document.body.style.overflow = '';
+            } else {
+                sidebar.classList.add('active');
+                overlay.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+        
+        // 点击侧边栏链接后自动关闭（移动端）
+        document.querySelectorAll('.sidebar-link').forEach(link => {
+            link.addEventListener('click', function() {
+                if (window.innerWidth < 1024) {
+                    toggleSidebar();
+                }
+            });
+        });
+        
+        // ESC 键关闭侧边栏
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                const sidebar = document.getElementById('sidebar');
+                if (sidebar.classList.contains('active')) {
+                    toggleSidebar();
+                }
+            }
+        });
+        
+        // 窗口大小改变时重置侧边栏
+        window.addEventListener('resize', function() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.querySelector('.sidebar-overlay');
+            
+            if (window.innerWidth >= 1024) {
+                sidebar.classList.remove('active');
+                overlay.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        });
         
         // 页面加载完成后初始化
         document.addEventListener('DOMContentLoaded', function() {

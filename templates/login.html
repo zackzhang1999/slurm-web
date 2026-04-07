@@ -188,8 +188,36 @@
         /* 响应式优化 */
         @media (max-width: 640px) {
             .glass-card {
-                margin: 1rem;
-                padding: 1.5rem;
+                margin: 0.5rem;
+                padding: 1.25rem;
+            }
+            
+            body {
+                padding: 0.5rem;
+            }
+            
+            .text-2xl {
+                font-size: 1.5rem;
+            }
+            
+            .glass-card .p-8 {
+                padding: 1.25rem;
+            }
+        }
+        
+        /* 触摸优化 */
+        @media (max-width: 768px) {
+            .input-field {
+                min-height: 48px;
+                font-size: 16px; /* 防止 iOS 缩放 */
+            }
+            
+            .btn-login {
+                min-height: 48px;
+            }
+            
+            .tab-btn {
+                min-height: 44px;
             }
         }
     </style>
