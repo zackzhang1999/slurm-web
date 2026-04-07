@@ -2913,19 +2913,43 @@ def parse_hourly_trend(hours=24):
     return {k: round(v, 1) for k, v in sorted(hourly.items())}
 
 def parse_daily_trend(days=7):
-    """Get daily job submission trend"""
-    output = run_command(f"timeout 3 sacct -a -X --format=Submit -S now-{days}days --parsable2 --noheader 2>/dev/null || echo ''")
+    """Get daily job CPU hours trend"""
+    output = run_command(f"timeout 3 sacct -a -X --format=Submit,CPUTime -S now-{days}days --parsable2 --noheader 2>/dev/null || echo ''")
     daily = {}
     if output and not output.startswith("Error"):
         for line in output.strip().split('\n'):
-            submit_time = line.strip()
+            if '|' not in line:
+                continue
+            parts = line.split('|')
+            if len(parts) < 2:
+                continue
+            submit_time = parts[0].strip()
+            cpu_time = parts[1].strip()
             if submit_time and 'T' in submit_time:
                 try:
                     date = submit_time.split('T')[0]
-                    daily[date] = daily.get(date, 0) + 1
+                    
+                    # Parse CPU time to hours
+                    # Format: DD-HH:MM:SS or HH:MM:SS
+                    cpu_hours = 0
+                    if '-' in cpu_time:
+                        days, time_part = cpu_time.split('-')
+                        cpu_hours += int(days) * 24
+                    else:
+                        time_part = cpu_time
+                    
+                    if ':' in time_part:
+                        time_parts = time_part.split(':')
+                        if len(time_parts) >= 2:
+                            cpu_hours += int(time_parts[0])
+                            cpu_hours += int(time_parts[1]) / 60  # Add minutes as fraction
+                    
+                    daily[date] = daily.get(date, 0) + cpu_hours
                 except:
                     pass
-    return dict(sorted(daily.items()))
+    
+    # Round to 1 decimal place
+    return {k: round(v, 1) for k, v in sorted(daily.items())}
 
 def parse_job_duration_distribution(hours=168):
     """Analyze job duration distribution"""
