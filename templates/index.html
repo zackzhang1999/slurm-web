@@ -1593,6 +1593,11 @@ async function viewJobOutput(jobId) {
     
     currentOutputJobId = targetJobId;
     
+    // 关闭作业详情抽屉（如果打开）
+    if (typeof closeJobDetail === 'function') {
+        closeJobDetail();
+    }
+    
     // 获取行数设置（默认100）
     const lines = document.getElementById('job-output-lines')?.value || 100;
     
