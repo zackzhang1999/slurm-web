@@ -2146,17 +2146,29 @@ function updateStatsCharts(jobDist, durationDist, hourlyTrend, dailyTrend, waitA
         }
     });
     
-    // 日趋势柱状图
+    // 日趋势波浪图（平滑曲线面积图）
     if (statsDailyChart) statsDailyChart.destroy();
     statsDailyChart = new Chart(document.getElementById('stats-daily-chart'), {
-        type: 'bar',
+        type: 'line',
         data: {
             labels: Object.keys(dailyTrend).map(d => d.substring(5)), // 从日期中提取 MM-DD
-            datasets: [{ label: '作业数', data: Object.values(dailyTrend), backgroundColor: '#10b981' }]
+            datasets: [{
+                label: '作业数',
+                data: Object.values(dailyTrend),
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.2)',
+                fill: true,
+                tension: 0.4, // 平滑曲线
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                pointBackgroundColor: '#10b981',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2
+            }]
         },
-        options: { 
-            responsive: true, 
-            maintainAspectRatio: false, 
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: {
                 x: {
@@ -2165,6 +2177,9 @@ function updateStatsCharts(jobDist, durationDist, hourlyTrend, dailyTrend, waitA
                         autoSkip: true,
                         maxTicksLimit: 15
                     }
+                },
+                y: {
+                    beginAtZero: true
                 }
             }
         }
