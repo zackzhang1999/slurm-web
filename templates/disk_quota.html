@@ -12,7 +12,7 @@
     </div>
 
     <!-- 核心指标卡片 -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <div class="flex items-center justify-between">
                 <div>
@@ -27,11 +27,11 @@
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <div class="flex items-center justify-between">
                 <div>
-                    <p class="text-sm text-slate-500">超限用户</p>
-                    <p class="text-2xl font-bold text-red-600" id="over-limit-users">--</p>
+                    <p class="text-sm text-slate-500">正常用户</p>
+                    <p class="text-2xl font-bold text-green-600" id="normal-users">--</p>
                 </div>
-                <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                    <i class="fas fa-exclamation-triangle text-red-600 text-xl"></i>
+                <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-check-circle text-green-600 text-xl"></i>
                 </div>
             </div>
         </div>
@@ -46,6 +46,28 @@
                 </div>
             </div>
         </div>
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-slate-500">软限超限</p>
+                    <p class="text-2xl font-bold text-orange-600" id="over-limit-users">--</p>
+                </div>
+                <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-exclamation-triangle text-orange-600 text-xl"></i>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-slate-500">超过硬限</p>
+                    <p class="text-2xl font-bold text-red-600" id="critical-users">--</p>
+                </div>
+                <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-ban text-red-600 text-xl"></i>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- 用户配额表格 -->
@@ -56,7 +78,8 @@
                 <option value="">所有状态</option>
                 <option value="normal">正常</option>
                 <option value="warning">接近软限</option>
-                <option value="over">超限</option>
+                <option value="over">软限超限</option>
+                <option value="critical">超过硬限</option>
             </select>
             <button onclick="openSetQuotaModal()" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg text-sm admin-only">
                 <i class="fas fa-cog mr-2"></i>设置配额
@@ -74,11 +97,11 @@
                         <tr>
                             <th class="px-4 py-3 text-left">用户</th>
                             <th class="px-4 py-3 text-left">已用空间</th>
+                            <th class="px-4 py-3 text-left">剩余空间</th>
                             <th class="px-4 py-3 text-left">空间限制</th>
-                            <th class="px-4 py-3 text-left">空间使用率</th>
-                            <th class="px-4 py-3 text-left">已用文件数</th>
-                            <th class="px-4 py-3 text-left">文件数限制</th>
+                            <th class="px-4 py-3 text-left">使用率</th>
                             <th class="px-4 py-3 text-left">状态</th>
+                            <th class="px-4 py-3 text-left">说明</th>
                         </tr>
                     </thead>
                     <tbody id="quota-table-body">
@@ -198,13 +221,19 @@ function getQuotaStatus(used, soft, hard) {
     const softNum = parseSize(soft);
     const hardNum = parseSize(hard);
 
+    // 超过硬限制
     if (hardNum > 0 && usedNum >= hardNum) {
-        return { status: 'over', label: '超限', class: 'bg-red-100 text-red-700' };
+        return { status: 'critical', label: '超过硬限', class: 'bg-red-100 text-red-700', desc: '已超出硬限制，无法写入' };
     }
+    // 在软限制和硬限制之间
     if (softNum > 0 && usedNum >= softNum) {
-        return { status: 'warning', label: '接近软限', class: 'bg-yellow-100 text-yellow-700' };
+        return { status: 'over', label: '超限', class: 'bg-orange-100 text-orange-700', desc: '已超出软限制，请尽快清理' };
     }
-    return { status: 'normal', label: '正常', class: 'bg-green-100 text-green-700' };
+    // 接近软限制（>= 80%）
+    if (softNum > 0 && usedNum >= softNum * 0.8) {
+        return { status: 'warning', label: '接近软限', class: 'bg-yellow-100 text-yellow-700', desc: '接近软限制，请注意' };
+    }
+    return { status: 'normal', label: '正常', class: 'bg-green-100 text-green-700', desc: '使用正常' };
 }
 
 function getUsagePercent(used, limit) {
@@ -216,9 +245,20 @@ function getUsagePercent(used, limit) {
 }
 
 function getProgressBarColor(percent, status) {
-    if (status === 'over') return 'bg-red-500';
+    if (status === 'critical') return 'bg-red-600';
+    if (status === 'over') return 'bg-orange-500';
     if (status === 'warning') return 'bg-yellow-500';
     return 'bg-green-500';
+}
+
+function getRemainingSpace(used, hard) {
+    if (hard === '-' || hard === '0') return '无限制';
+    const usedNum = parseSize(used);
+    const hardNum = parseSize(hard);
+    if (hardNum === 0) return '无限制';
+    const remaining = hardNum - usedNum;
+    if (remaining <= 0) return '0';
+    return formatSize(remaining);
 }
 
 function renderQuotaTable(data, tbodyId) {
@@ -248,11 +288,13 @@ function renderQuotaTable(data, tbodyId) {
         const status = getQuotaStatus(item.used_space, item.soft_limit, item.hard_limit);
         const usagePercent = getUsagePercent(item.used_space, item.hard_limit);
         const progressColor = getProgressBarColor(usagePercent, status.status);
+        const remaining = getRemainingSpace(item.used_space, item.hard_limit);
 
         return `
             <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                 <td class="px-4 py-3 font-medium text-slate-800">${item.name}</td>
                 <td class="px-4 py-3 text-slate-600">${formatSize(item.used_space)}</td>
+                <td class="px-4 py-3 text-slate-600">${remaining}</td>
                 <td class="px-4 py-3 text-slate-600">
                     <div>软限: ${formatSize(item.soft_limit)}</div>
                     <div class="text-xs text-slate-500">硬限: ${formatSize(item.hard_limit)}</div>
@@ -263,14 +305,10 @@ function renderQuotaTable(data, tbodyId) {
                     </div>
                     <span class="text-xs text-slate-500">${usagePercent}%</span>
                 </td>
-                <td class="px-4 py-3 text-slate-600">${item.used_files || '-'}</td>
-                <td class="px-4 py-3 text-slate-600">
-                    <div>软限: ${item.soft_files || '-'}</div>
-                    <div class="text-xs text-slate-500">硬限: ${item.hard_files || '-'}</div>
-                </td>
                 <td class="px-4 py-3">
                     <span class="px-2 py-1 rounded-full text-xs font-medium ${status.class}">${status.label}</span>
                 </td>
+                <td class="px-4 py-3 text-sm text-slate-500">${status.desc}</td>
             </tr>
         `;
     }).join('');
@@ -351,16 +389,19 @@ function loadDiskQuota() {
             // 更新指标卡片
             document.getElementById('user-count').textContent = data.summary?.total_users || data.users?.length || 0;
 
-            // 计算超限和接近软限用户
-            let overLimit = 0;
-            let warning = 0;
+            // 计算各类用户数量
+            let normal = 0, warning = 0, overLimit = 0, critical = 0;
             data.users.forEach(u => {
                 const status = getQuotaStatus(u.used_space, u.soft_limit, u.hard_limit);
-                if (status.status === 'over') overLimit++;
-                if (status.status === 'warning') warning++;
+                if (status.status === 'normal') normal++;
+                else if (status.status === 'warning') warning++;
+                else if (status.status === 'over') overLimit++;
+                else if (status.status === 'critical') critical++;
             });
-            document.getElementById('over-limit-users').textContent = overLimit;
+            document.getElementById('normal-users').textContent = normal;
             document.getElementById('warning-users').textContent = warning;
+            document.getElementById('over-limit-users').textContent = overLimit;
+            document.getElementById('critical-users').textContent = critical;
 
             // 渲染表格
             renderQuotaTable(data.users, 'quota-table-body');
