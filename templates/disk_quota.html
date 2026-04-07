@@ -256,10 +256,11 @@ function getRemainingSpace(used, hard) {
     const usedNum = parseSize(used);
     const hardNum = parseSize(hard);
     if (hardNum === 0) return '无限制';
-    const remaining = hardNum - usedNum;
-    if (remaining <= 0) return '0G';
-    // 转换为 GB 显示，保留2位小数
-    return remaining.toFixed(2) + 'G';
+    // parseSize 返回的是 MB，需要转换为 GB (除以 1024)
+    const remainingMB = hardNum - usedNum;
+    if (remainingMB <= 0) return '0G';
+    const remainingGB = remainingMB / 1024;
+    return remainingGB.toFixed(2) + 'G';
 }
 
 function renderQuotaTable(data, tbodyId) {
