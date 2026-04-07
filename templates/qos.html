@@ -212,18 +212,8 @@
             
             <div class="mt-6">
                 <h4 class="font-semibold text-slate-800 mb-3">关联用户/账户</h4>
-                <div id="qos-associations" class="overflow-auto" style="max-height: 200px;">
-                    <table class="w-full table-modern text-sm">
-                        <thead class="sticky top-0 bg-white">
-                            <tr>
-                                <th class="px-4 py-2 text-left">类型</th>
-                                <th class="px-4 py-2 text-left">名称</th>
-                                <th class="px-4 py-2 text-left">账户</th>
-                                <th class="px-4 py-2 text-left">集群</th>
-                            </tr>
-                        </thead>
-                        <tbody id="associations-table"></tbody>
-                    </table>
+                <div id="qos-associations" class="space-y-2">
+                    <!-- 层级结构将通过JS动态生成 -->
                 </div>
             </div>
         </div>
@@ -664,33 +654,95 @@ async function viewQosDetail(name) {
     }
 }
 
-// 查看关联
+// 查看关联 - 层级展示，账户可折叠
 async function viewAssociations(name) {
     try {
         const response = await fetch(`/api/qos/${name}/associations`);
         const associations = await response.json();
         
-        const tbody = document.getElementById('associations-table');
-        tbody.innerHTML = '';
+        const container = document.getElementById('qos-associations');
+        container.innerHTML = '';
         
         if (associations.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-slate-500">暂无关联</td></tr>';
-        } else {
-            associations.forEach(assoc => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td class="px-4 py-2">${assoc.user ? '用户' : '账户'}</td>
-                    <td class="px-4 py-2">${assoc.user || assoc.account}</td>
-                    <td class="px-4 py-2">${assoc.account}</td>
-                    <td class="px-4 py-2">${assoc.cluster}</td>
-                `;
-                tbody.appendChild(tr);
-            });
+            container.innerHTML = '<div class="px-4 py-4 text-center text-slate-500">暂无关联</div>';
+            return;
         }
         
-        document.getElementById('detail-modal').classList.add('active');
+        // 按账户分组
+        const accountGroups = {};
+        associations.forEach(assoc => {
+            const accountName = assoc.account;
+            if (!accountGroups[accountName]) {
+                accountGroups[accountName] = {
+                    account: assoc,
+                    users: []
+                };
+            }
+            if (assoc.user) {
+                accountGroups[accountName].users.push(assoc);
+            }
+        });
+        
+        // 生成层级HTML
+        Object.entries(accountGroups).forEach(([accountName, group], index) => {
+            const accountId = `account-${name}-${index}`;
+            const hasUsers = group.users.length > 0;
+            
+            // 账户行（可点击折叠/展开）
+            const accountDiv = document.createElement('div');
+            accountDiv.className = 'border border-slate-200 rounded-lg overflow-hidden';
+            accountDiv.innerHTML = `
+                <div class="flex items-center justify-between px-4 py-3 bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors ${hasUsers ? '' : 'cursor-default'}" 
+                     onclick="${hasUsers ? `toggleAccountUsers('${accountId}')` : ''}">
+                    <div class="flex items-center gap-3">
+                        ${hasUsers ? `<i id="icon-${accountId}" class="fas fa-chevron-right text-slate-400 transition-transform"></i>` : '<span class="w-4"></span>'}
+                        <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm">
+                            <i class="fas fa-folder"></i>
+                        </div>
+                        <div>
+                            <div class="font-medium text-slate-800">${accountName}</div>
+                            <div class="text-xs text-slate-500">账户 · ${group.users.length} 个用户</div>
+                        </div>
+                    </div>
+                    <div class="text-sm text-slate-500">${group.account.cluster}</div>
+                </div>
+                ${hasUsers ? `
+                <div id="${accountId}" class="hidden border-t border-slate-200">
+                    ${group.users.map(user => `
+                        <div class="flex items-center gap-3 px-4 py-2 pl-12 hover:bg-slate-50 transition-colors">
+                            <div class="w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center text-white text-xs">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <div class="flex-1">
+                                <div class="text-sm font-medium text-slate-700">${user.user}</div>
+                            </div>
+                            <div class="text-xs text-slate-500">${user.cluster}</div>
+                        </div>
+                    `).join('')}
+                </div>
+                ` : ''}
+            `;
+            container.appendChild(accountDiv);
+        });
+        
     } catch (error) {
         console.error('Error loading associations:', error);
+    }
+}
+
+// 切换账户用户的展开/折叠
+function toggleAccountUsers(accountId) {
+    const usersDiv = document.getElementById(accountId);
+    const icon = document.getElementById(`icon-${accountId}`);
+    
+    if (usersDiv.classList.contains('hidden')) {
+        usersDiv.classList.remove('hidden');
+        icon.classList.remove('fa-chevron-right');
+        icon.classList.add('fa-chevron-down');
+    } else {
+        usersDiv.classList.add('hidden');
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-right');
     }
 }
 
