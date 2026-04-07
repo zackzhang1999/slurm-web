@@ -253,6 +253,41 @@ def run_command(cmd, timeout=30):
     except Exception as e:
         return f"Error: {str(e)}"
 
+def parse_node_list(node_list_str):
+    """Parse node list string to individual node names
+    Handles formats like:
+    - node01
+    - node[01-03]
+    - node01,node02,node[03-05]
+    """
+    import re
+    
+    if not node_list_str:
+        return []
+    
+    nodes = []
+    # Split by comma first
+    parts = node_list_str.split(',')
+    
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+        
+        # Check for range pattern: prefix[01-03]
+        match = re.match(r'(.+)\[(\d+)-(\d+)\]', part)
+        if match:
+            prefix = match.group(1)
+            start = int(match.group(2))
+            end = int(match.group(3))
+            width = len(match.group(2))  # Preserve leading zeros
+            for i in range(start, end + 1):
+                nodes.append(f"{prefix}{i:0{width}d}")
+        else:
+            nodes.append(part)
+    
+    return nodes
+
 def parse_sinfo():
     """Parse sinfo output - get unique nodes"""
     output = run_command("sinfo -N -o '%N|%T|%c|%m|%e|%O|%G|%P|%C|%z'")
@@ -2941,36 +2976,113 @@ def parse_wait_time_analysis(hours=24):
     return {'count': 0}
 
 def parse_node_efficiency(days=7):
-    """Get node efficiency ranking"""
-    output = run_command(f"timeout 3 sreport cluster utilization -t percent --format=Cluster,Allocated,Down,Idle,Reported -T {days} 2>/dev/null || echo ''")
-    nodes = []
+    """Get node efficiency ranking based on job history data"""
+    from datetime import datetime, timedelta
+    
+    end_time = datetime.now()
+    start_time = end_time - timedelta(days=days)
+    start_str = start_time.strftime('%Y-%m-%dT%H:%M:%S')
+    end_str = end_time.strftime('%Y-%m-%dT%H:%M:%S')
+    
+    # Get job data with node information
+    output = run_command(f"timeout 10 sacct -a -X --format=JobID,NodeList,ReqCPUS,CPUTimeRAW,ElapsedRAW,State,ExitCode -S {start_str} -E {end_str} --parsable2 --noheader 2>/dev/null || echo ''")
+    
+    node_stats = {}
+    
     if output and not output.startswith("Error"):
-        lines = output.split('\n')[2:]
-        for line in lines:
-            parts = line.split()
-            if len(parts) >= 5:
-                try:
-                    allocated = float(parts[1].rstrip('%'))
-                    idle = float(parts[3].rstrip('%'))
-                    down = float(parts[2].rstrip('%'))
-                    efficiency = allocated / (allocated + idle + 0.1) * 100
-                    nodes.append({
-                        'name': parts[0],
-                        'allocated': allocated,
-                        'idle': idle,
-                        'down': down,
-                        'efficiency': round(efficiency, 1)
-                    })
-                except:
-                    pass
-    # Fallback to sinfo data
-    if not nodes:
-        node_info = parse_sinfo()
-        for node in node_info:
-            state = node['state'].lower()
-            efficiency = 100 if 'alloc' in state else 50 if 'mix' in state else 0
-            nodes.append({'name': node['name'], 'allocated': efficiency, 'idle': 100-efficiency, 'down': 0, 'efficiency': efficiency})
-    return sorted(nodes, key=lambda x: x['efficiency'], reverse=True)
+        for line in output.strip().split('\n'):
+            if not line or '|' not in line:
+                continue
+            parts = line.split('|')
+            if len(parts) < 7:
+                continue
+            
+            try:
+                job_id = parts[0]
+                node_list = parts[1]
+                req_cpus = int(parts[2]) if parts[2].isdigit() else 1
+                cpu_time_raw = int(parts[3]) if parts[3].isdigit() else 0
+                elapsed_raw = int(parts[4]) if parts[4].isdigit() else 0
+                state = parts[5].upper()
+                exit_code = parts[6]
+                
+                # Skip pending jobs (no node assigned)
+                if not node_list or node_list == 'None assigned':
+                    continue
+                
+                # Parse node names (handle ranges like node[01-03])
+                nodes = parse_node_list(node_list)
+                
+                for node in nodes:
+                    if node not in node_stats:
+                        node_stats[node] = {
+                            'total_jobs': 0,
+                            'completed_jobs': 0,
+                            'failed_jobs': 0,
+                            'total_cpu_time': 0,
+                            'total_requested_cpu_time': 0
+                        }
+                    
+                    node_stats[node]['total_jobs'] += 1
+                    
+                    # Count success/failure
+                    if state == 'COMPLETED':
+                        node_stats[node]['completed_jobs'] += 1
+                    elif state in ['FAILED', 'CANCELLED', 'TIMEOUT', 'NODE_FAIL']:
+                        node_stats[node]['failed_jobs'] += 1
+                    
+                    # Calculate CPU efficiency
+                    # CPUTimeRAW is in seconds, ElapsedRAW is in seconds
+                    requested_cpu_time = req_cpus * elapsed_raw  # in CPU-seconds
+                    node_stats[node]['total_cpu_time'] += cpu_time_raw
+                    node_stats[node]['total_requested_cpu_time'] += requested_cpu_time
+            except Exception as e:
+                continue
+    
+    # Get current node status from sinfo
+    node_info = parse_sinfo()
+    node_states = {n['name']: n['state'] for n in node_info}
+    
+    # Calculate efficiency metrics
+    nodes = []
+    for node_name, stats in node_stats.items():
+        total_jobs = stats['total_jobs']
+        if total_jobs == 0:
+            continue
+        
+        # Success rate
+        success_rate = (stats['completed_jobs'] / total_jobs * 100) if total_jobs > 0 else 0
+        
+        # CPU efficiency (actual CPU time / requested CPU time)
+        cpu_efficiency = (stats['total_cpu_time'] / stats['total_requested_cpu_time'] * 100) if stats['total_requested_cpu_time'] > 0 else 0
+        
+        # Cap efficiency at 100%
+        cpu_efficiency = min(100, cpu_efficiency)
+        
+        # Node availability (based on current state)
+        state = node_states.get(node_name, 'UNKNOWN').lower()
+        if 'down' in state or 'drain' in state or 'fail' in state:
+            availability = 0
+        elif 'alloc' in state or 'mix' in state or 'idle' in state:
+            availability = 100
+        else:
+            availability = 50
+        
+        # Overall efficiency score (weighted average)
+        efficiency_score = success_rate * 0.4 + cpu_efficiency * 0.4 + availability * 0.2
+        
+        nodes.append({
+            'name': node_name,
+            'total_jobs': total_jobs,
+            'success_rate': round(success_rate, 1),
+            'cpu_efficiency': round(cpu_efficiency, 1),
+            'availability': availability,
+            'efficiency_score': round(efficiency_score, 1),
+            'state': node_states.get(node_name, 'UNKNOWN')
+        })
+    
+    # Sort by efficiency score (descending)
+    return sorted(nodes, key=lambda x: x['efficiency_score'], reverse=True)
 
 def parse_resource_efficiency(hours=24):
     """Calculate resource utilization efficiency"""

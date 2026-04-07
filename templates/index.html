@@ -685,19 +685,25 @@
 
     <!-- 节点效率排行 -->
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 mb-6">
-        <div class="p-6 border-b border-slate-200">
+        <div class="p-6 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <h3 class="text-lg font-semibold text-slate-800"><i class="fas fa-tachometer-alt text-primary-500 mr-2"></i>节点效率排行</h3>
+            <div class="text-sm text-slate-500">
+                <i class="fas fa-info-circle mr-1"></i>
+                基于作业历史数据计算：成功率×40% + CPU效率×40% + 可用率×20%
+            </div>
         </div>
         <div class="overflow-x-auto">
             <table class="w-full table-modern" id="node-efficiency-table">
                 <thead>
                     <tr>
-                        <th class="px-6 py-3 text-left">排名</th>
-                        <th class="px-6 py-3 text-left">节点</th>
-                        <th class="px-6 py-3 text-left">分配率</th>
-                        <th class="px-6 py-3 text-left">空闲率</th>
-                        <th class="px-6 py-3 text-left">故障率</th>
-                        <th class="px-6 py-3 text-left">综合效率</th>
+                        <th class="px-4 py-3 text-left">排名</th>
+                        <th class="px-4 py-3 text-left">节点</th>
+                        <th class="px-4 py-3 text-left">状态</th>
+                        <th class="px-4 py-3 text-center">作业数</th>
+                        <th class="px-4 py-3 text-left">成功率</th>
+                        <th class="px-4 py-3 text-left">CPU效率</th>
+                        <th class="px-4 py-3 text-left">可用率</th>
+                        <th class="px-4 py-3 text-left">综合得分</th>
                     </tr>
                 </thead>
                 <tbody id="node-efficiency-body"></tbody>
@@ -2200,17 +2206,78 @@ function updateNodeEfficiencyTable(nodeEfficiency) {
     const tbody = document.getElementById('node-efficiency-body');
     tbody.innerHTML = '';
     if (!nodeEfficiency || nodeEfficiency.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-8 text-center text-slate-500">暂无节点数据</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">暂无节点数据</td></tr>';
         return;
     }
+    
+    // Helper function to get efficiency color class
+    const getEfficiencyColor = (score) => {
+        if (score >= 90) return 'text-green-600';
+        if (score >= 70) return 'text-blue-600';
+        if (score >= 50) return 'text-yellow-600';
+        return 'text-red-600';
+    };
+    
+    // Helper function to get progress bar color
+    const getProgressColor = (score) => {
+        if (score >= 90) return 'bg-green-500';
+        if (score >= 70) return 'bg-blue-500';
+        if (score >= 50) return 'bg-yellow-500';
+        return 'bg-red-500';
+    };
+    
+    // Helper function to get state badge
+    const getStateBadge = (state) => {
+        const stateLower = (state || '').toLowerCase();
+        if (stateLower.includes('idle')) return '<span class="badge badge-success">空闲</span>';
+        if (stateLower.includes('alloc')) return '<span class="badge badge-warning">已分配</span>';
+        if (stateLower.includes('mix')) return '<span class="badge badge-info">混合</span>';
+        if (stateLower.includes('down') || stateLower.includes('drain')) return '<span class="badge badge-danger">故障</span>';
+        return '<span class="badge badge-primary">' + (state || '未知') + '</span>';
+    };
+    
     nodeEfficiency.forEach((node, index) => {
-        tbody.innerHTML += `<tr class="fade-in">
-            <td class="px-6 py-4"><span class="font-bold ${index < 3 ? 'text-amber-500' : 'text-slate-500'}">${index + 1}</span></td>
-            <td class="px-6 py-4 font-medium">${node.name}</td>
-            <td class="px-6 py-4">${node.allocated.toFixed(1)}%</td>
-            <td class="px-6 py-4">${node.idle.toFixed(1)}%</td>
-            <td class="px-6 py-4">${node.down.toFixed(1)}%</td>
-            <td class="px-6 py-4"><div class="flex items-center gap-2"><div class="w-16 progress-bar"><div class="progress-fill ${node.efficiency >= 80 ? 'bg-success-500' : node.efficiency >= 50 ? 'bg-warning-500' : 'bg-danger-500'}" style="width: ${node.efficiency}%"></div></div><span>${node.efficiency}%</span></div></td>
+        const rankClass = index < 3 ? ['text-amber-500', 'text-slate-400', 'text-amber-700'][index] : 'text-slate-500';
+        const scoreColor = getEfficiencyColor(node.efficiency_score);
+        const progressColor = getProgressColor(node.efficiency_score);
+        
+        tbody.innerHTML += `<tr class="fade-in border-b border-slate-100 hover:bg-slate-50 transition-colors">
+            <td class="px-4 py-3"><span class="font-bold ${rankClass}">${index + 1}</span></td>
+            <td class="px-4 py-3 font-medium text-slate-800">${node.name}</td>
+            <td class="px-4 py-3">${getStateBadge(node.state)}</td>
+            <td class="px-4 py-3 text-center text-slate-600">${node.total_jobs}</td>
+            <td class="px-4 py-3">
+                <div class="flex items-center gap-2">
+                    <div class="w-12 progress-bar bg-slate-200">
+                        <div class="progress-fill ${node.success_rate >= 80 ? 'bg-green-500' : node.success_rate >= 50 ? 'bg-yellow-500' : 'bg-red-500'}" style="width: ${node.success_rate}%"></div>
+                    </div>
+                    <span class="text-sm text-slate-600">${node.success_rate}%</span>
+                </div>
+            </td>
+            <td class="px-4 py-3">
+                <div class="flex items-center gap-2">
+                    <div class="w-12 progress-bar bg-slate-200">
+                        <div class="progress-fill ${node.cpu_efficiency >= 80 ? 'bg-green-500' : node.cpu_efficiency >= 50 ? 'bg-yellow-500' : 'bg-red-500'}" style="width: ${node.cpu_efficiency}%"></div>
+                    </div>
+                    <span class="text-sm text-slate-600">${node.cpu_efficiency}%</span>
+                </div>
+            </td>
+            <td class="px-4 py-3">
+                <div class="flex items-center gap-2">
+                    <div class="w-12 progress-bar bg-slate-200">
+                        <div class="progress-fill ${node.availability >= 80 ? 'bg-green-500' : node.availability >= 50 ? 'bg-yellow-500' : 'bg-red-500'}" style="width: ${node.availability}%"></div>
+                    </div>
+                    <span class="text-sm text-slate-600">${node.availability}%</span>
+                </div>
+            </td>
+            <td class="px-4 py-3">
+                <div class="flex items-center gap-2">
+                    <div class="w-16 progress-bar bg-slate-200">
+                        <div class="progress-fill ${progressColor}" style="width: ${node.efficiency_score}%"></div>
+                    </div>
+                    <span class="text-sm font-semibold ${scoreColor}">${node.efficiency_score}</span>
+                </div>
+            </td>
         </tr>`;
     });
 }
