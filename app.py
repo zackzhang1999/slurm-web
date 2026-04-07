@@ -1957,11 +1957,16 @@ def api_job_output(job_id):
         if match:
             work_dir = match.group(1)
     
-    # Fallback to sacct
+    # Fallback to sacct (for completed jobs, scontrol may not have the info)
     if not work_dir:
         sacct_output = run_command(f"sacct -j {job_id} --format=WorkDir --parsable2 --noheader 2>/dev/null")
-        if sacct_output and not output.startswith("Error"):
-            work_dir = sacct_output.strip().split('\n')[0].strip()
+        if sacct_output and not sacct_output.startswith("Error"):
+            # Get the first non-empty line (skip .extern and .batch steps)
+            for line in sacct_output.strip().split('\n'):
+                line = line.strip()
+                if line and not line.startswith('WorkDir'):
+                    work_dir = line
+                    break
     
     if not work_dir:
         return jsonify({'success': False, 'message': '无法获取作业工作目录'}), 404
