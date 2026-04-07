@@ -2043,7 +2043,9 @@ window.loadStatistics = async function() {
         // 更新概览统计
         document.getElementById('stats-completed').textContent = jobStats.completed;
         document.getElementById('stats-failed').textContent = jobStats.failed;
-        const successRate = jobStats.total > 0 ? Math.round(jobStats.completed / jobStats.total * 100) : 0;
+        // 成功率 = 已完成 / (已完成 + 失败)
+        const completedAndFailed = jobStats.completed + jobStats.failed;
+        const successRate = completedAndFailed > 0 ? Math.round(jobStats.completed / completedAndFailed * 100) : 0;
         document.getElementById('stats-success-rate').textContent = successRate + '%';
         document.getElementById('stats-cpu-hours').textContent = Math.round(jobStats.total_cpu_hours);
         
@@ -2190,7 +2192,9 @@ function updatePartitionUsageTable(partitionUsage) {
         return;
     }
     Object.entries(partitionUsage).forEach(([name, data]) => {
-        const successRate = data.jobs > 0 ? Math.round(data.completed / data.jobs * 100) : 0;
+        // 成功率 = 已完成 / (已完成 + 失败)
+        const completedAndFailed = data.completed + data.failed;
+        const successRate = completedAndFailed > 0 ? Math.round(data.completed / completedAndFailed * 100) : 0;
         tbody.innerHTML += `<tr class="fade-in">
             <td class="px-6 py-4 font-medium">${name}</td>
             <td class="px-6 py-4">${data.jobs}</td>
