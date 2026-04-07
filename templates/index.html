@@ -2738,6 +2738,18 @@ document.addEventListener('DOMContentLoaded', function() {
     loadAnnouncements();
 });
 
+// 处理从其他页面返回时重新加载数据（如从拓扑页面返回）
+window.addEventListener('pageshow', function(event) {
+    // event.persisted 为 true 表示从 bfcache 恢复页面
+    if (event.persisted || !allData || Object.keys(allData).length === 0) {
+        fetch('/api/allsystems').then(r => r.json()).then(data => {
+            allData = data;
+            window.allData = data;
+            window.onDataUpdate(data);
+        }).catch(e => console.error('重新加载数据失败:', e));
+    }
+});
+
 // ============== 公告栏功能 ==============
 function loadAnnouncements() {
     fetch('/api/announcements', {credentials: 'include'})
