@@ -1939,6 +1939,85 @@ def api_job_detail(job_id):
     
     return jsonify(details)
 
+@app.route('/api/job/<job_id>/output')
+def api_job_output(job_id):
+    """Get job output file content"""
+    # Get lines parameter (default 100)
+    lines = request.args.get('lines', 100, type=int)
+    if lines < 1:
+        lines = 100
+    if lines > 10000:  # Max limit
+        lines = 10000
+    
+    # Get job details to find work directory
+    output = run_command(f"scontrol show job {job_id}")
+    work_dir = None
+    if output and not output.startswith("Error"):
+        match = re.search(r'WorkDir=(\S+)', output)
+        if match:
+            work_dir = match.group(1)
+    
+    # Fallback to sacct
+    if not work_dir:
+        sacct_output = run_command(f"sacct -j {job_id} --format=WorkDir --parsable2 --noheader 2>/dev/null")
+        if sacct_output and not output.startswith("Error"):
+            work_dir = sacct_output.strip().split('\n')[0].strip()
+    
+    if not work_dir:
+        return jsonify({'success': False, 'message': '无法获取作业工作目录'}), 404
+    
+    # Try common output file patterns
+    output_file = f"{work_dir}/slurm-{job_id}.out"
+    
+    # Check if file exists and read it
+    try:
+        # Use tail to get last N lines
+        result = subprocess.run(
+            ['tail', '-n', str(lines), output_file],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0:
+            return jsonify({
+                'success': True,
+                'job_id': job_id,
+                'file_path': output_file,
+                'lines': lines,
+                'content': result.stdout
+            })
+        else:
+            # Try alternative file name patterns
+            alt_patterns = [
+                f"{work_dir}/{job_id}.out",
+                f"/tmp/slurm-{job_id}.out",
+                f"/var/tmp/slurm-{job_id}.out"
+            ]
+            for alt_file in alt_patterns:
+                result = subprocess.run(
+                    ['tail', '-n', str(lines), alt_file],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                if result.returncode == 0:
+                    return jsonify({
+                        'success': True,
+                        'job_id': job_id,
+                        'file_path': alt_file,
+                        'lines': lines,
+                        'content': result.stdout
+                    })
+            
+            return jsonify({
+                'success': False,
+                'message': f'输出文件不存在或无法读取: {output_file}'
+            }), 404
+    except subprocess.TimeoutExpired:
+        return jsonify({'success': False, 'message': '读取输出文件超时'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'读取输出文件失败: {str(e)}'}), 500
+
 
 def format_bytes(bytes_val):
     """Convert bytes to human readable format"""

@@ -840,6 +840,36 @@ echo 'Hello World'"></textarea>
         </div>
     </div>
 </div>
+
+<!-- 作业输出查看模态框 -->
+<div id="job-output-modal" class="modal">
+    <div class="modal-content" style="max-width: 900px; max-height: 80vh;">
+        <div class="p-6 border-b border-slate-200 flex items-center justify-between">
+            <div>
+                <h3 class="text-lg font-semibold"><i class="fas fa-file-alt text-primary-500 mr-2"></i>作业输出</h3>
+                <p class="text-sm text-slate-500 mt-1" id="job-output-file-path"></p>
+            </div>
+            <button onclick="closeJobOutputModal()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times text-xl"></i></button>
+        </div>
+        <div class="p-4 border-b border-slate-200 bg-slate-50 flex items-center gap-4">
+            <label class="text-sm text-slate-600">显示最后</label>
+            <input type="number" id="job-output-lines" value="100" min="1" max="10000" class="w-20 px-2 py-1 border border-slate-300 rounded text-sm">
+            <span class="text-sm text-slate-600">行</span>
+            <button onclick="refreshJobOutput()" class="px-3 py-1 bg-primary-500 hover:bg-primary-600 text-white rounded text-sm transition-colors">
+                <i class="fas fa-sync-alt mr-1"></i>刷新
+            </button>
+            <button onclick="copyJobOutput()" class="px-3 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-sm transition-colors ml-auto">
+                <i class="fas fa-copy mr-1"></i>复制
+            </button>
+        </div>
+        <div class="p-0 overflow-auto" style="max-height: calc(80vh - 180px);">
+            <pre id="job-output-content" class="p-4 text-sm font-mono text-slate-800 bg-white whitespace-pre-wrap break-all" style="min-height: 200px;"></pre>
+        </div>
+        <div class="p-4 border-t border-slate-200 flex justify-end">
+            <button onclick="closeJobOutputModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors">关闭</button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -1552,29 +1582,74 @@ function resumeJob(jobId) {
     });
 }
 
+// 当前查看输出的作业ID
+let currentOutputJobId = null;
+
 // 查看作业输出日志
 async function viewJobOutput(jobId) {
     // 如果没有传入jobId，使用当前详情页的作业ID
     const targetJobId = jobId || currentDetailJobId;
     if (!targetJobId) return;
     
+    currentOutputJobId = targetJobId;
+    
+    // 获取行数设置（默认100）
+    const lines = document.getElementById('job-output-lines')?.value || 100;
+    
+    // 显示模态框
+    document.getElementById('job-output-modal').classList.add('active');
+    document.getElementById('job-output-content').textContent = '加载中...';
+    
+    await loadJobOutput(targetJobId, lines);
+}
+
+// 加载作业输出内容
+async function loadJobOutput(jobId, lines) {
     try {
-        // 尝试获取作业输出路径
-        const response = await fetch(`/api/job/${targetJobId}`);
-        const job = await response.json();
+        const response = await fetch(`/api/job/${jobId}/output?lines=${lines}`);
+        const result = await response.json();
         
-        // scontrol返回的字段名是workdir(小写)
-        const workDir = job.workdir || job.work_dir;
-        if (workDir) {
-            // 显示输出文件路径信息
-            const stdoutPath = `${workDir}/slurm-${targetJobId}.out`;
-            alert(`作业输出文件路径:\n${stdoutPath}\n\n注: 请通过 SSH 查看文件内容。`);
+        if (result.success) {
+            document.getElementById('job-output-file-path').textContent = result.file_path;
+            document.getElementById('job-output-content').textContent = result.content || '(无输出内容)';
         } else {
-            alert('无法获取作业工作目录');
+            document.getElementById('job-output-file-path').textContent = '';
+            document.getElementById('job-output-content').textContent = '错误: ' + (result.message || '无法加载输出');
         }
     } catch (e) {
-        console.error('Failed to get job output path:', e);
-        alert('获取作业输出路径失败');
+        console.error('Failed to load job output:', e);
+        document.getElementById('job-output-content').textContent = '加载失败: ' + e.message;
+    }
+}
+
+// 刷新作业输出
+async function refreshJobOutput() {
+    if (!currentOutputJobId) return;
+    const lines = document.getElementById('job-output-lines').value || 100;
+    document.getElementById('job-output-content').textContent = '加载中...';
+    await loadJobOutput(currentOutputJobId, lines);
+}
+
+// 关闭作业输出模态框
+function closeJobOutputModal() {
+    document.getElementById('job-output-modal').classList.remove('active');
+    currentOutputJobId = null;
+}
+
+// 复制作业输出到剪贴板
+async function copyJobOutput() {
+    const content = document.getElementById('job-output-content').textContent;
+    try {
+        await navigator.clipboard.writeText(content);
+        // 显示临时提示
+        const btn = document.querySelector('button[onclick="copyJobOutput()"]');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check mr-1"></i>已复制';
+        setTimeout(() => {
+            btn.innerHTML = originalHTML;
+        }, 2000);
+    } catch (e) {
+        alert('复制失败，请手动复制');
     }
 }
 
