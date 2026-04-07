@@ -1071,6 +1071,34 @@ function loadNodesTable(nodes) {
         return;
     }
     nodes.forEach(node => {
+        // Parse CPU allocation: Alloc/Idle/Other/Total
+        let cpuAlloc = '0', cpuTotal = node.cpus || '0';
+        if (node.cpu_alloc && node.cpu_alloc.includes('/')) {
+            const cpuParts = node.cpu_alloc.split('/');
+            if (cpuParts.length >= 4) {
+                cpuAlloc = cpuParts[0];
+                cpuTotal = cpuParts[3];
+            }
+        }
+        
+        // Parse GPU: extract total and allocated from gres
+        let gpuAlloc = '0', gpuTotal = '0';
+        if (node.gres && node.gres !== 'none') {
+            // Extract total GPUs from gres (e.g., "gpu:8" or "gpu:8(S:0-1)")
+            const gpuMatch = node.gres.match(/gpu:(\d+)/i);
+            if (gpuMatch) {
+                gpuTotal = gpuMatch[1];
+            }
+            // For allocated GPUs, check if state indicates allocation
+            const state = node.state.toLowerCase();
+            if (state.includes('alloc')) {
+                gpuAlloc = gpuTotal; // All allocated
+            } else if (state.includes('mix')) {
+                // Mixed state - partial allocation, show as partial
+                gpuAlloc = gpuTotal; // Simplified: show total for mixed state
+            }
+        }
+        
         tbody.innerHTML += `<tr class="fade-in hover:bg-slate-50 transition-colors">
             <td class="px-6 py-4">
                 <a href="#" onclick="showNodeDetail('${node.name}'); return false;" 
@@ -1081,11 +1109,11 @@ function loadNodesTable(nodes) {
             </td>
             <td class="px-6 py-4">${getStateBadge(node.state)}</td>
             <td class="px-6 py-4">${node.partition}</td>
-            <td class="px-6 py-4">${node.cpus}</td>
+            <td class="px-6 py-4">${cpuAlloc}/${cpuTotal}</td>
             <td class="px-6 py-4">${formatBytes(parseInt(node.memory) * 1024 * 1024)}</td>
             <td class="px-6 py-4">${formatBytes(parseInt(node.free_mem) * 1024 * 1024)}</td>
             <td class="px-6 py-4">${node.load}</td>
-            <td class="px-6 py-4">${node.gres}</td>
+            <td class="px-6 py-4">${gpuAlloc}/${gpuTotal}</td>
             <td class="px-6 py-4">
                 <button onclick="event.stopPropagation(); showNodeDetail('${node.name}')" 
                         class="px-3 py-1 bg-primary-50 hover:bg-primary-100 text-primary-600 rounded-lg text-sm transition-colors">
