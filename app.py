@@ -2685,9 +2685,7 @@ def parse_sacct_stats(hours=24):
                 stats['total'] += 1
                 state_upper = state.upper()
                 if state_upper in ['COMPLETED', 'CD']: stats['completed'] += 1
-                elif state_upper in ['FAILED', 'F']: stats['failed'] += 1
-                elif state_upper in ['CANCELLED', 'CA']: stats['cancelled'] += 1
-                elif state_upper in ['TIMEOUT', 'TO']: stats['timeout'] += 1
+                elif state_upper in ['FAILED', 'F', 'TIMEOUT', 'TO', 'CANCELLED', 'CA']: stats['failed'] += 1
                 
                 if partition not in stats['partitions']: 
                     stats['partitions'][partition] = {'jobs': 0, 'cpu_hours': 0}
