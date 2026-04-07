@@ -61,13 +61,13 @@
                 <thead>
                     <tr>
                         <th class="px-4 py-3 text-left">名称</th>
-                        <th class="px-4 py-3 text-left text-center">优先级</th>
                         <th class="px-4 py-3 text-left text-center">最大提交<br>作业数/用户</th>
                         <th class="px-4 py-3 text-left text-center">每用户<br>最大作业数</th>
                         <th class="px-4 py-3 text-left">最大运行时间</th>
-                        <th class="px-4 py-3 text-left">最大资源限制</th>
+                        <th class="px-4 py-3 text-left">每作业<br>最大资源</th>
+                        <th class="px-4 py-3 text-left">每用户<br>最大资源</th>
+                        <th class="px-4 py-3 text-left">组资源限制<br>(GrpTRES)</th>
                         <th class="px-4 py-3 text-left">关联</th>
-                        <th class="px-4 py-3 text-left">抢占模式</th>
                         <th class="px-4 py-3 text-left">操作</th>
                     </tr>
                 </thead>
@@ -141,21 +141,49 @@
                         <input type="number" id="edit-usage" step="0.1" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
                     </div>
                 </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">最大作业数 (MaxJobs)</label>
+                        <input type="number" id="edit-max-jobs" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="10">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">最大提交数 (MaxSubmit)</label>
+                        <input type="number" id="edit-max-submit" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="20">
+                    </div>
+                </div>
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">资源限制 (GrpTRES)</label>
                     <input type="text" id="edit-grp-tres" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="cpu=100,mem=500G">
+                    <p class="text-xs text-slate-500 mt-1">格式: cpu=100,mem=500G,gpu=10</p>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">最大资源 (MaxTRES)</label>
                     <input type="text" id="edit-max-tres" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="cpu=24,gpu=4">
                 </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">每作业最大资源 (MaxTRESPerJob)</label>
+                        <input type="text" id="edit-max-tres-per-job" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="gpu=4,cpu=16">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">每用户最大资源 (MaxTRESPerUser)</label>
+                        <input type="text" id="edit-max-tres-per-user" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="gpu=10,cpu=64">
+                    </div>
+                </div>
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">最大时间 (MaxWall)</label>
                     <input type="text" id="edit-max-wall" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="24:00:00">
+                    <p class="text-xs text-slate-500 mt-1">HH:MM:SS 格式</p>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">抢占设置</label>
-                    <input type="text" id="edit-preempt" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="例如: normal,low">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">公平份额 (Fairshare)</label>
+                        <input type="number" id="edit-fairshare" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="100">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">抢占设置</label>
+                        <input type="text" id="edit-preempt" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500" placeholder="例如: normal,low">
+                    </div>
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">管理员密码</label>
@@ -261,8 +289,8 @@ let userList = [];
 async function loadQosList() {
     try {
         const [qosRes, accountsRes] = await Promise.all([
-            fetch('/api/qos'),
-            fetch('/api/accounts')
+            fetch('/api/qos', {credentials: 'include'}),
+            fetch('/api/accounts', {credentials: 'include'})
         ]);
         qosList = await qosRes.json();
         const accountsData = await accountsRes.json();
@@ -270,7 +298,7 @@ async function loadQosList() {
         userList = accountsData.users || [];
         
         document.getElementById('stat-total').textContent = qosList.length;
-        document.getElementById('stat-active').textContent = qosList.filter(q => q.flags !== 'Deleted').length;
+        document.getElementById('stat-active').textContent = qosList.filter(q => q.has_association).length;
         
         renderQosTable();
         
@@ -288,7 +316,7 @@ function renderQosTable() {
     tbody.innerHTML = '';
     
     if (qosList.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-8 text-center text-slate-500">暂无QOS数据</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="px-6 py-8 text-center text-slate-500">暂无QOS数据</td></tr>';
         return;
     }
     
@@ -305,22 +333,24 @@ function renderQosTable() {
         const maxSubmitPerUser = qos.max_submit_jobs_per_user || qos.max_submit_jobs || '';
         const maxJobsPerUser = qos.max_jobs_per_user || '';
         const maxWall = formatLimit(qos.max_wall_duration_per_job);
-        const maxTres = formatLimit(qos.max_tres_per_job);
+        const maxTresPerJob = formatLimit(qos.max_tres_per_job);
+        const maxTresPerUser = formatLimit(qos.max_tres_per_user);
+        const grpTres = formatLimit(qos.grp_tres);
         
         tr.innerHTML = `
             <td class="px-4 py-4 font-medium">
                 <span class="badge badge-warning mr-1">QOS</span>
                 ${qos.name}
             </td>
-            <td class="px-4 py-4 text-center">${qos.priority}</td>
             <td class="px-4 py-4 text-center">${formatLimit(maxSubmitPerUser)}</td>
             <td class="px-4 py-4 text-center">${formatLimit(maxJobsPerUser)}</td>
             <td class="px-4 py-4">${maxWall}</td>
-            <td class="px-4 py-4 text-xs">${maxTres}</td>
+            <td class="px-4 py-4 text-xs">${maxTresPerJob}</td>
+            <td class="px-4 py-4 text-xs">${maxTresPerUser}</td>
+            <td class="px-4 py-4 text-xs">${grpTres}</td>
             <td class="px-4 py-4 text-sm">
                 ${qos.assoc_id ? `<span class="text-slate-500">-</span>` : `<button onclick="openAssocModal('${qos.name}')" class="text-primary-500 hover:text-primary-600" title="设置关联"><i class="fas fa-link"></i></button>`}
             </td>
-            <td class="px-4 py-4">${qos.preempt_mode || '-'}</td>
             <td class="px-4 py-4">
                 <button onclick="openEditModal('${qos.name}')" class="text-primary-500 hover:text-primary-600 mr-2" title="编辑">
                     <i class="fas fa-edit"></i>
@@ -351,12 +381,16 @@ function openCreateModal() {
 function openEditModal(name) {
     document.getElementById('edit-modal').classList.add('active');
     document.getElementById('edit-qos-name').value = name;
-    // 清空表单字段
     document.getElementById('edit-priority').value = '';
     document.getElementById('edit-usage').value = '';
+    document.getElementById('edit-max-jobs').value = '';
+    document.getElementById('edit-max-submit').value = '';
     document.getElementById('edit-grp-tres').value = '';
     document.getElementById('edit-max-tres').value = '';
+    document.getElementById('edit-max-tres-per-job').value = '';
+    document.getElementById('edit-max-tres-per-user').value = '';
     document.getElementById('edit-max-wall').value = '';
+    document.getElementById('edit-fairshare').value = '';
     document.getElementById('edit-preempt').value = '';
     document.getElementById('edit-password').value = '';
 }
@@ -426,16 +460,26 @@ async function updateQos() {
     
     const priority = document.getElementById('edit-priority').value.trim();
     const usagefactor = document.getElementById('edit-usage').value.trim();
+    const maxjobs = document.getElementById('edit-max-jobs').value.trim();
+    const maxsubmit = document.getElementById('edit-max-submit').value.trim();
     const grptres = document.getElementById('edit-grp-tres').value.trim();
     const maxtres = document.getElementById('edit-max-tres').value.trim();
+    const maxtresperjob = document.getElementById('edit-max-tres-per-job').value.trim();
+    const maxtresperuser = document.getElementById('edit-max-tres-per-user').value.trim();
     const maxwall = document.getElementById('edit-max-wall').value.trim();
+    const fairshare = document.getElementById('edit-fairshare').value.trim();
     const preempt = document.getElementById('edit-preempt').value.trim();
     
     if (priority) data.priority = priority;
     if (usagefactor) data.usagefactor = usagefactor;
+    if (maxjobs) data.maxjobs = maxjobs;
+    if (maxsubmit) data.maxsubmit = maxsubmit;
     if (grptres) data.grptres = grptres;
     if (maxtres) data.maxtres = maxtres;
+    if (maxtresperjob) data.maxtresperjob = maxtresperjob;
+    if (maxtresperuser) data.maxtresperuser = maxtresperuser;
     if (maxwall) data.maxwall = maxwall;
+    if (fairshare) data.fairshare = fairshare;
     if (preempt) data.preempt = preempt;
     
     // 检查是否至少有一个字段被修改

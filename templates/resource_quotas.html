@@ -55,10 +55,7 @@
 
 <!-- Tab 导航 -->
 <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-2 mb-6 inline-flex">
-    <button class="tab-btn active" onclick="switchTab('all', this)">
-        <i class="fas fa-list mr-2"></i>全部配额
-    </button>
-    <button class="tab-btn" onclick="switchTab('qos', this)">
+    <button class="tab-btn active" onclick="switchTab('qos', this)">
         <i class="fas fa-bolt mr-2"></i>QOS限制
     </button>
     <button class="tab-btn" onclick="switchTab('account', this)">
@@ -70,43 +67,7 @@
 </div>
 
 <!-- 全部配额 Tab -->
-<div id="tab-all" class="tab-content active">
-    <div class="bg-white rounded-xl shadow-sm border border-slate-200">
-        <div class="p-6 border-b border-slate-200 flex items-center justify-between">
-            <h3 class="text-lg font-semibold text-slate-800">
-                <i class="fas fa-list text-primary-500 mr-2"></i>资源配额列表
-            </h3>
-            <button onclick="openQuotaModal()" class="px-4 py-2 bg-primary-500 hover:bg-primary-600 text-white rounded-lg transition-colors admin-only">
-                <i class="fas fa-plus mr-2"></i>设置配额
-            </button>
-        </div>
-        <div class="overflow-x-auto">
-            <div id="all-loading" class="flex items-center justify-center py-12 text-slate-500">
-                <div class="spinner mr-3"></div>加载中...
-            </div>
-            <div id="all-content" class="hidden">
-                <table class="w-full table-modern text-sm">
-                    <thead>
-                        <tr>
-                            <th class="px-4 py-3 text-left">实体</th>
-                            <th class="px-4 py-3 text-left">集群</th>
-                            <th class="px-4 py-3 text-left">资源配额</th>
-                            <th class="px-4 py-3 text-left">单任务最大</th>
-                            <th class="px-4 py-3 text-left">每用户限制</th>
-                            <th class="px-4 py-3 text-left">最大时间</th>
-                            <th class="px-4 py-3 text-left">公平份额</th>
-                            <th class="px-4 py-3 text-left">操作</th>
-                        </tr>
-                    </thead>
-                    <tbody id="all-table"></tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- QOS限制 Tab -->
-<div id="tab-qos" class="tab-content">
+<div id="tab-qos" class="tab-content active">
     <div class="bg-white rounded-xl shadow-sm border border-slate-200">
         <div class="p-6 border-b border-slate-200">
             <h3 class="text-lg font-semibold text-slate-800">
@@ -121,12 +82,13 @@
                 <table class="w-full table-modern text-sm">
                     <thead>
                         <tr>
-                            <th class="px-4 py-3 text-left">QOS名称</th>
-                            <th class="px-4 py-3 text-left">资源配额</th>
-                            <th class="px-4 py-3 text-left">单任务最大</th>
-                            <th class="px-4 py-3 text-left">每用户限制</th>
-                            <th class="px-4 py-3 text-left">最大时间</th>
-                            <th class="px-4 py-3 text-left">优先级</th>
+                            <th class="px-4 py-3 text-left">名称</th>
+                            <th class="px-4 py-3 text-left text-center">最大提交<br>作业数/用户</th>
+                            <th class="px-4 py-3 text-left text-center">每用户<br>最大作业数</th>
+                            <th class="px-4 py-3 text-left">最大运行时间</th>
+                            <th class="px-4 py-3 text-left">每作业<br>最大资源</th>
+                            <th class="px-4 py-3 text-left">每用户<br>最大资源</th>
+                            <th class="px-4 py-3 text-left">组资源限制<br>(GrpTRES)</th>
                             <th class="px-4 py-3 text-left">操作</th>
                         </tr>
                     </thead>
@@ -295,7 +257,7 @@ async function loadData() {
 
 async function loadQuotas() {
     try {
-        const response = await fetch('/api/resource-quotas');
+        const response = await fetch('/api/resource-quotas', {credentials: 'include'});
         allQuotas = await response.json();
         
         const userQuotas = allQuotas.filter(q => q.user && q.user !== '(account)');
@@ -308,6 +270,11 @@ async function loadQuotas() {
         renderAllTable();
         renderAccountTable();
         renderUserTable();
+        
+        document.getElementById('account-loading').classList.add('hidden');
+        document.getElementById('account-content').classList.remove('hidden');
+        document.getElementById('user-loading').classList.add('hidden');
+        document.getElementById('user-content').classList.remove('hidden');
     } catch (error) {
         console.error('Error loading quotas:', error);
     }
@@ -315,7 +282,7 @@ async function loadQuotas() {
 
 async function loadQosLimits() {
     try {
-        const response = await fetch('/api/resource-quotas/qos-limits');
+        const response = await fetch('/api/resource-quotas/qos-limits', {credentials: 'include'});
         qosLimits = await response.json();
         document.getElementById('stat-qos').textContent = qosLimits.length;
         renderQosTable();
@@ -367,8 +334,10 @@ function renderQosTable() {
     const tbody = document.getElementById('qos-table');
     tbody.innerHTML = '';
     
+    const formatValue = (val) => !val || val === 'N/A' ? '<span class="text-slate-400">-</span>' : val;
+    
     if (qosLimits.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">暂无QOS数据</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">暂无QOS数据</td></tr>';
     } else {
         qosLimits.forEach(q => {
             const tr = document.createElement('tr');
@@ -377,11 +346,12 @@ function renderQosTable() {
                     <span class="badge badge-warning">QOS</span>
                     <span class="ml-2 font-medium">${q.name}</span>
                 </td>
-                <td class="px-4 py-3"><code class="text-xs bg-slate-100 px-2 py-1 rounded">${q.grp_tres}</code></td>
-                <td class="px-4 py-3"><code class="text-xs bg-slate-100 px-2 py-1 rounded">${q.max_tres}</code></td>
-                <td class="px-4 py-3"><code class="text-xs bg-slate-100 px-2 py-1 rounded">${q.max_tres_per_user}</code></td>
-                <td class="px-4 py-3">${q.max_wall}</td>
-                <td class="px-4 py-3">${q.priority}</td>
+                <td class="px-4 py-3 text-center">${formatValue(q.max_submit_jobs_per_user)}</td>
+                <td class="px-4 py-3 text-center">${formatValue(q.max_jobs_per_user)}</td>
+                <td class="px-4 py-3">${formatValue(q.max_wall)}</td>
+                <td class="px-4 py-3"><code class="text-xs bg-slate-100 px-2 py-1 rounded">${formatValue(q.max_tres_per_job)}</code></td>
+                <td class="px-4 py-3"><code class="text-xs bg-slate-100 px-2 py-1 rounded">${formatValue(q.max_tres_per_user)}</code></td>
+                <td class="px-4 py-3"><code class="text-xs bg-slate-100 px-2 py-1 rounded">${formatValue(q.grp_tres)}</code></td>
                 <td class="px-4 py-3">
                     <button onclick="editQuota('qos', '${q.name}')" class="text-primary-500 hover:text-primary-600">
                         <i class="fas fa-edit"></i>
@@ -471,6 +441,12 @@ function switchTab(tab, btn) {
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById(`tab-${tab}`).classList.add('active');
+    
+    if (tab === 'account' && document.getElementById('account-table')) {
+        renderAccountTable();
+    } else if (tab === 'user' && document.getElementById('user-table')) {
+        renderUserTable();
+    }
 }
 
 // 模态框操作

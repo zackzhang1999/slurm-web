@@ -3188,25 +3188,26 @@ def api_tres_types():
 @app.route('/api/resource-quotas/qos-limits')
 def api_qos_limits():
     """Get QOS resource limits"""
-    # 添加 MaxJobs 和 MaxSubmitJobs
     output = run_command(
-        "sacctmgr show qos format=Name,GrpTRES,MaxTRES,MaxTRESPerUser,MaxWall,Priority,MaxJobs,MaxSubmitJobs --noheader --parsable2 2>/dev/null"
+        "sacctmgr show qos format=Name,GrpTRES,MaxTRES,MaxTRESPerUser,MaxTRESPerJob,MaxWallDurationPerJob,MaxSubmitJobsPerUser,MaxJobsPerUser,MaxJobs,MaxSubmitJobs --noheader --parsable2 2>/dev/null"
     )
     
     qos_limits = []
     if output and not output.startswith("Error"):
         for line in output.strip().split('\n'):
             parts = line.split('|')
-            if len(parts) >= 8:
+            if len(parts) >= 10:
                 qos_limits.append({
                     'name': parts[0],
                     'grp_tres': parts[1] if parts[1] else 'N/A',
                     'max_tres': parts[2] if parts[2] else 'N/A',
                     'max_tres_per_user': parts[3] if parts[3] else 'N/A',
-                    'max_wall': parts[4] if parts[4] else 'N/A',
-                    'priority': parts[5] if parts[5] else '0',
-                    'max_jobs': parts[6] if parts[6] else 'N/A',
-                    'max_submit': parts[7] if parts[7] else 'N/A'
+                    'max_tres_per_job': parts[4] if parts[4] else 'N/A',
+                    'max_wall': parts[5] if parts[5] else 'N/A',
+                    'max_submit_jobs_per_user': parts[6] if parts[6] else 'N/A',
+                    'max_jobs_per_user': parts[7] if parts[7] else 'N/A',
+                    'max_jobs': parts[8] if parts[8] else 'N/A',
+                    'max_submit_jobs': parts[9] if parts[9] else 'N/A'
                 })
     
     return jsonify(qos_limits)
@@ -3324,7 +3325,7 @@ def api_qos_list():
     """List all QOS configurations with resource limits"""
     # 获取基本QOS信息 + 资源配额字段
     output = run_command(
-        "sacctmgr show qos format=Name,Priority,GraceTime,Preempt,PreemptMode,Flags,"
+        "sacctmgr show qos format=Name,Priority,GraceTime,Preempt,PreemptMode,Flags,GrpTRES,"
         "MaxSubmitJobsPerUser,MaxJobsPerUser,MaxWallDurationPerJob,MaxTRESPerJob,"
         "MaxTRESPerUser,MaxJobs,MaxSubmitJobs --noheader --parsable2 2>/dev/null"
     )
@@ -3333,7 +3334,7 @@ def api_qos_list():
     if output and not output.startswith("Error"):
         for line in output.strip().split('\n'):
             parts = line.split('|')
-            if len(parts) >= 12:
+            if len(parts) >= 13:
                 qos_list.append({
                     'name': parts[0],
                     'priority': parts[1] if parts[1] else '0',
@@ -3341,15 +3342,26 @@ def api_qos_list():
                     'preempt': parts[3] if parts[3] else '',
                     'preempt_mode': parts[4] if parts[4] else '',
                     'flags': parts[5] if parts[5] else '',
+                    'grp_tres': parts[6] if parts[6] else '',
                     # 资源配额字段
-                    'max_submit_jobs_per_user': parts[6] if parts[6] else '',
-                    'max_jobs_per_user': parts[7] if parts[7] else '',
-                    'max_wall_duration_per_job': parts[8] if parts[8] else '',
-                    'max_tres_per_job': parts[9] if parts[9] else '',
-                    'max_tres_per_user': parts[10] if parts[10] else '',
-                    'max_jobs': parts[11] if parts[11] else '',
-                    'max_submit_jobs': parts[12] if len(parts) > 12 and parts[12] else ''
+                    'max_submit_jobs_per_user': parts[7] if parts[7] else '',
+                    'max_jobs_per_user': parts[8] if parts[8] else '',
+                    'max_wall_duration_per_job': parts[9] if parts[9] else '',
+                    'max_tres_per_job': parts[10] if parts[10] else '',
+                    'max_tres_per_user': parts[11] if parts[11] else '',
+                    'max_jobs': parts[12] if parts[12] else '',
+                    'max_submit_jobs': parts[13] if len(parts) > 13 and parts[13] else ''
                 })
+    
+    assoc_output = run_command("sacctmgr show assoc format=QOS --noheader --parsable2 2>/dev/null")
+    active_qos = set()
+    if assoc_output and not assoc_output.startswith("Error"):
+        for line in assoc_output.strip().split('\n'):
+            if line.strip():
+                active_qos.add(line.strip())
+    
+    for qos in qos_list:
+        qos['has_association'] = qos['name'] in active_qos
     
     return jsonify(qos_list)
 
@@ -3443,12 +3455,14 @@ def api_qos_modify(qos_name):
     add_param('preempt', 'Preempt')
     add_param('usagefactor', 'UsageFactor')
     add_param('maxjobs', 'MaxJobs')
+    add_param('maxsubmit', 'MaxSubmit')
     add_param('maxsubmitjobs', 'MaxSubmitJobs')
     add_param('maxtresperjob', 'MaxTRESPerJob')
     add_param('maxtresperuser', 'MaxTRESPerUser')
     add_param('maxjobsperuser', 'MaxJobsPerUser')
     add_param('maxsubmitjobsperuser', 'MaxSubmitJobsPerUser')
     add_param('maxwalldurationperjob', 'MaxWallDurationPerJob')
+    add_param('fairshare', 'Fairshare')
     
     if not set_parts:
         return jsonify({'success': False, 'message': '没有要修改的参数'}), 400
@@ -3473,11 +3487,18 @@ def api_qos_delete(qos_name):
         if password != config.get('admin_password', 'admin888'):
             return jsonify({'success': False, 'message': '密码错误'}), 403
     
-    command = f"sacctmgr -i delete qos where name={qos_name}"
+    command = f"sacctmgr -i delete qos where name={qos_name} withoutreinforce"
     result = run_command(command)
     
     if result and not result.startswith("Error"):
-        return jsonify({'success': True, 'message': f'QOS {qos_name} 删除成功'})
+        if 'Deleting' in result or 'delete' in result.lower() or 'removed' in result.lower() or 'success' in result.lower():
+            return jsonify({'success': True, 'message': f'QOS {qos_name} 删除成功'})
+        elif 'Nothing deleted' in result:
+            return jsonify({'success': False, 'message': 'QOS有关联，无法直接删除。请先移除所有关联的用户和账户。'}), 400
+        elif 'Default QOS' in result or 'DefQOS' in result:
+            return jsonify({'success': False, 'message': 'QOS是用户或账户的默认QOS，请先更改默认值后再删除。'}), 400
+        else:
+            return jsonify({'success': True, 'message': f'QOS {qos_name} 删除成功'})
     else:
         return jsonify({'success': False, 'message': result}), 500
 
@@ -3873,12 +3894,26 @@ def api_users_list():
         for line in output.strip().split('\n'):
             parts = line.split('|')
             if len(parts) >= 4:
-                users.append({
+                user_data = {
                     'name': parts[0],
                     'default_account': parts[1] if parts[1] else '',
                     'default_wckey': parts[2] if parts[2] else '',
-                    'admin_level': parts[3] if parts[3] else 'None'
-                })
+                    'admin_level': parts[3] if parts[3] else 'None',
+                    'accounts': []
+                }
+                users.append(user_data)
+    
+    assoc_output = run_command("sacctmgr show assoc format=User,Account --noheader --parsable2 2>/dev/null")
+    user_accounts = defaultdict(list)
+    if assoc_output and not assoc_output.startswith("Error"):
+        for line in assoc_output.strip().split('\n'):
+            parts = line.split('|')
+            if len(parts) >= 2 and parts[0] and parts[1]:
+                user_accounts[parts[0]].append(parts[1])
+    
+    for user in users:
+        if user['name'] in user_accounts:
+            user['accounts'] = list(set(user_accounts[user['name']]))
     
     return jsonify(users)
 

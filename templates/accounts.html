@@ -577,7 +577,7 @@ function renderTreeNode(node, level) {
     const hasChildren = node.children && node.children.length > 0;
     
     div.innerHTML = `
-        <div class="flex items-center gap-3 p-3 bg-white rounded-lg border border-slate-200 mt-2 hover:border-primary-300 transition-colors">
+        <div class="account-card flex items-center gap-3 p-3 bg-white rounded-lg border border-slate-200 mt-2 hover:border-primary-300 transition-colors cursor-pointer" onclick="toggleAccountUsers('${node.name}', this)">
             <div class="w-8 h-8 bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-lg flex items-center justify-center">
                 <i class="fas fa-folder text-white text-sm"></i>
             </div>
@@ -585,9 +585,14 @@ function renderTreeNode(node, level) {
                 <div class="font-medium text-slate-800">${node.name}</div>
                 ${node.description ? `<div class="text-sm text-slate-500">${node.description}</div>` : ''}
             </div>
-            <button onclick="deleteAccount('${node.name}')" class="p-2 text-slate-400 hover:text-danger-500 transition-colors" title="删除">
+            <i class="fas fa-chevron-down text-slate-400 expand-icon transition-transform"></i>
+            <button onclick="event.stopPropagation(); deleteAccount('${node.name}')" class="p-2 text-slate-400 hover:text-danger-500 transition-colors" title="删除">
                 <i class="fas fa-trash"></i>
             </button>
+        </div>
+        <div class="account-users hidden ml-4 mt-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+            <div class="text-sm text-slate-500 mb-2"><i class="fas fa-users mr-1"></i>账户用户:</div>
+            <div class="users-list text-sm text-slate-700">加载中...</div>
         </div>
     `;
     
@@ -760,6 +765,53 @@ async function deleteAccount(name) {
         }
     } catch (error) {
         alert('删除失败');
+    }
+}
+
+// 展开/收起账户用户列表
+const expandedAccounts = new Set();
+
+async function toggleAccountUsers(accountName, element) {
+    const card = element.closest('.account-card');
+    const usersSection = card.nextElementSibling;
+    const expandIcon = card.querySelector('.expand-icon');
+    
+    if (expandedAccounts.has(accountName)) {
+        expandedAccounts.delete(accountName);
+        usersSection.classList.add('hidden');
+        expandIcon.classList.remove('rotate-180');
+    } else {
+        expandedAccounts.add(accountName);
+        usersSection.classList.remove('hidden');
+        expandIcon.classList.add('rotate-180');
+        
+        const usersList = usersSection.querySelector('.users-list');
+        usersList.textContent = '加载中...';
+        
+        try {
+            const response = await fetch('/api/users', {credentials: 'include'});
+            const allUsers = await response.json();
+            
+            const accountUsers = allUsers.filter(u => 
+                u.default_account === accountName || (u.accounts && u.accounts.includes(accountName))
+            );
+            
+            if (accountUsers.length === 0) {
+                usersList.textContent = '暂无用户';
+            } else {
+                usersList.innerHTML = accountUsers.map(u => {
+                    let levelText = u.admin_level === 'None' || !u.admin_level ? '无' : u.admin_level;
+                    return `
+                    <div class="flex items-center gap-2 py-1 border-b border-slate-200 last:border-0">
+                        <i class="fas fa-user text-slate-400"></i>
+                        <span>${u.name}</span>
+                        <span class="text-xs text-slate-500">(${levelText})</span>
+                    </div>
+                `}).join('');
+            }
+        } catch (error) {
+            usersList.textContent = '加载失败';
+        }
     }
 }
 
