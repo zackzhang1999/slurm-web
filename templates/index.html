@@ -2113,7 +2113,7 @@ function updateStatsCharts(jobDist, durationDist, hourlyTrend, dailyTrend, waitA
         ? Object.keys(hourlyTrend).map(h => h + ':00')
         : Object.keys(dailyTrend).map(d => d.substring(5)); // 从日期中提取 MM-DD
     const trendData = isShortRange ? Object.values(hourlyTrend) : Object.values(dailyTrend);
-    const trendLabel = isShortRange ? '作业数/小时' : '作业数/天';
+    const trendLabel = isShortRange ? '作业小时数' : '作业数/天';
     
     statsHourlyChart = new Chart(document.getElementById('stats-hourly-chart'), {
         type: 'line',

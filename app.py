@@ -2859,14 +2859,21 @@ def parse_partition_usage(hours=24):
     return partitions
 
 def parse_hourly_trend(hours=24):
-    """Get hourly job submission trend"""
-    output = run_command(f"timeout 3 sacct -a -X --format=Submit -S now-{hours}hours --parsable2 --noheader 2>/dev/null || echo ''")
+    """Get hourly job CPU hours trend (sum of job durations per hour)"""
+    output = run_command(f"timeout 3 sacct -a -X --format=Submit,Elapsed -S now-{hours}hours --parsable2 --noheader 2>/dev/null || echo ''")
     hourly = {}
     if output and not output.startswith("Error"):
         for line in output.strip().split('\n'):
-            submit_time = line.strip()
+            if '|' not in line:
+                continue
+            parts = line.split('|')
+            if len(parts) < 2:
+                continue
+            submit_time = parts[0].strip()
+            elapsed = parts[1].strip()
             if submit_time and 'T' in submit_time:
                 try:
+                    # Parse submit time
                     date = submit_time.split('T')[0]
                     hour = submit_time.split('T')[1].split(':')[0]
                     # 短时间范围(<=24h)只按小时聚合，长时间按日期+小时聚合
@@ -2875,7 +2882,23 @@ def parse_hourly_trend(hours=24):
                     else:
                         # 简化为 MM-DD HH 格式
                         key = f"{date[5:]} {hour}"
-                    hourly[key] = hourly.get(key, 0) + 1
+                    
+                    # Parse elapsed time to hours
+                    # Format: DD-HH:MM:SS or HH:MM:SS
+                    elapsed_hours = 0
+                    if '-' in elapsed:
+                        days, time_part = elapsed.split('-')
+                        elapsed_hours += int(days) * 24
+                    else:
+                        time_part = elapsed
+                    
+                    if ':' in time_part:
+                        time_parts = time_part.split(':')
+                        if len(time_parts) >= 2:
+                            elapsed_hours += int(time_parts[0])
+                            elapsed_hours += int(time_parts[1]) / 60  # Add minutes as fraction
+                    
+                    hourly[key] = hourly.get(key, 0) + elapsed_hours
                 except:
                     pass
     
@@ -2886,7 +2909,8 @@ def parse_hourly_trend(hours=24):
             if h_str not in hourly:
                 hourly[h_str] = 0
     
-    return dict(sorted(hourly.items()))
+    # Round to 1 decimal place
+    return {k: round(v, 1) for k, v in sorted(hourly.items())}
 
 def parse_daily_trend(days=7):
     """Get daily job submission trend"""
