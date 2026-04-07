@@ -22,6 +22,7 @@
     
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <!-- Socket.IO -->
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
@@ -31,22 +32,41 @@
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
+                        sans: ['Fira Sans', 'Inter', 'sans-serif'],
+                        mono: ['Fira Code', 'monospace'],
                     },
                     colors: {
                         primary: {
-                            50: '#eff6ff',
-                            100: '#dbeafe',
-                            200: '#bfdbfe',
-                            300: '#93c5fd',
-                            400: '#60a5fa',
-                            500: '#3b82f6',
-                            600: '#2563eb',
-                            700: '#1d4ed8',
-                            800: '#1e40af',
-                            900: '#1e3a8a',
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            200: '#bae6fd',
+                            300: '#7dd3fc',
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            800: '#075985',
+                            900: '#0c4a6e',
                         },
-                        dark: {
+                        accent: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            200: '#bbf7d0',
+                            300: '#86efac',
+                            400: '#4ade80',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                        },
+                        surface: {
+                            50: '#f8fafc',
+                            100: '#f1f5f9',
+                            200: '#e2e8f0',
+                            300: '#cbd5e1',
+                            400: '#94a3b8',
+                            500: '#64748b',
+                            600: '#475569',
+                            700: '#334155',
                             800: '#1e293b',
                             900: '#0f172a',
                         },
@@ -67,7 +87,19 @@
                             100: '#fee2e2',
                             500: '#ef4444',
                             600: '#dc2626',
+                        },
+                        info: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
                         }
+                    },
+                    boxShadow: {
+                        'glass': '0 8px 32px 0 rgba(31, 38, 135, 0.07)',
+                        'glass-lg': '0 8px 32px 0 rgba(31, 38, 135, 0.15)',
+                        'card': '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
+                        'card-hover': '0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -5px rgba(0, 0, 0, 0.02)',
                     }
                 }
             }
@@ -75,20 +107,87 @@
     </script>
     
     <style>
+        /* CSS 变量 - 设计系统 */
+        :root {
+            /* 主色调 */
+            --color-primary-50: #f0f9ff;
+            --color-primary-100: #e0f2fe;
+            --color-primary-500: #0ea5e9;
+            --color-primary-600: #0284c7;
+            --color-primary-700: #0369a1;
+            
+            /* 强调色 - 绿色 */
+            --color-accent-50: #f0fdf4;
+            --color-accent-100: #dcfce7;
+            --color-accent-500: #22c55e;
+            --color-accent-600: #16a34a;
+            --color-accent-700: #15803d;
+            
+            /* 表面色 */
+            --color-surface-50: #f8fafc;
+            --color-surface-100: #f1f5f9;
+            --color-surface-200: #e2e8f0;
+            --color-surface-300: #cbd5e1;
+            --color-surface-400: #94a3b8;
+            --color-surface-500: #64748b;
+            --color-surface-600: #475569;
+            --color-surface-700: #334155;
+            --color-surface-800: #1e293b;
+            --color-surface-900: #0f172a;
+            
+            /* 状态色 */
+            --color-success: #22c55e;
+            --color-warning: #f59e0b;
+            --color-danger: #ef4444;
+            --color-info: #3b82f6;
+            
+            /* 玻璃拟态 */
+            --glass-bg: rgba(255, 255, 255, 0.85);
+            --glass-bg-strong: rgba(255, 255, 255, 0.95);
+            --glass-border: rgba(255, 255, 255, 0.5);
+            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+            
+            /* 圆角 */
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+            --radius-xl: 24px;
+            
+            /* 间距 */
+            --space-xs: 4px;
+            --space-sm: 8px;
+            --space-md: 16px;
+            --space-lg: 24px;
+            --space-xl: 32px;
+            
+            /* 过渡 */
+            --transition-fast: 150ms ease;
+            --transition-normal: 250ms ease;
+            --transition-slow: 350ms ease;
+        }
+        
+        /* 全局样式 */
+        body {
+            font-family: 'Fira Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #f0f9ff 0%, #f8fafc 50%, #f0fdf4 100%);
+            min-height: 100vh;
+            color: var(--color-surface-800);
+        }
+        
         /* 自定义滚动条 */
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
         }
         ::-webkit-scrollbar-track {
-            background: #f1f5f9;
+            background: var(--color-surface-100);
         }
         ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
+            background: var(--color-surface-300);
             border-radius: 4px;
         }
         ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
+            background: var(--color-surface-400);
         }
         
         /* 动画 */
@@ -108,73 +207,207 @@
             box-shadow: 0 10px 40px rgba(0,0,0,0.1);
         }
         
-        /* 玻璃态效果 */
+        /* 玻璃拟态效果 */
         .glass {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
         }
         
-        /* 表格样式 */
+        .glass-strong {
+            background: var(--glass-bg-strong);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
+        }
+        
+        /* 现代化卡片 */
+        .card-modern {
+            background: white;
+            border-radius: var(--radius-lg);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            border: 1px solid var(--color-surface-200);
+            transition: all var(--transition-normal);
+        }
+        
+        .card-modern:hover {
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
+            transform: translateY(-2px);
+        }
+        
+        /* 统计卡片 */
+        .stat-card {
+            background: white;
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            border: 1px solid var(--color-surface-200);
+            transition: all var(--transition-normal);
+        }
+        
+        .stat-card:hover {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+        }
+        
+        /* 按钮样式 */
+        .btn-primary {
+            background: var(--color-accent-500);
+            color: white;
+            font-weight: 600;
+            padding: 10px 20px;
+            border-radius: var(--radius-md);
+            transition: all var(--transition-fast);
+            border: none;
+            cursor: pointer;
+        }
+        
+        .btn-primary:hover {
+            background: var(--color-accent-600);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+        }
+        
+        .btn-secondary {
+            background: var(--color-surface-100);
+            color: var(--color-surface-700);
+            font-weight: 500;
+            padding: 10px 20px;
+            border-radius: var(--radius-md);
+            transition: all var(--transition-fast);
+            border: 1px solid var(--color-surface-200);
+            cursor: pointer;
+        }
+        
+        .btn-secondary:hover {
+            background: var(--color-surface-200);
+        }
+        
+        /* 输入框 */
+        .input-modern {
+            background: var(--color-surface-50);
+            border: 1px solid var(--color-surface-200);
+            border-radius: var(--radius-md);
+            padding: 10px 14px;
+            font-size: 14px;
+            transition: all var(--transition-fast);
+            color: var(--color-surface-800);
+        }
+        
+        .input-modern:focus {
+            outline: none;
+            border-color: var(--color-accent-500);
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+            background: white;
+        }
+        
+        .input-modern::placeholder {
+            color: var(--color-surface-400);
+        }
+        
+        /* 现代化表格 */
         .table-modern {
             border-collapse: separate;
             border-spacing: 0;
+            width: 100%;
         }
         .table-modern th {
-            background: #f8fafc;
+            background: var(--color-surface-50);
             font-weight: 600;
             text-transform: uppercase;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             letter-spacing: 0.05em;
+            color: var(--color-surface-600);
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--color-surface-200);
         }
-        .table-modern td, .table-modern th {
-            border-bottom: 1px solid #e2e8f0;
+        .table-modern td {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--color-surface-100);
+            color: var(--color-surface-700);
         }
         .table-modern tr:last-child td {
             border-bottom: none;
         }
+        .table-modern tbody tr {
+            transition: background var(--transition-fast);
+        }
         .table-modern tbody tr:hover {
-            background: #f8fafc;
+            background: var(--color-surface-50);
         }
         
-        /* 侧边栏 */
+        /* 表格行状态 */
+        .table-row-success { background: rgba(34, 197, 94, 0.05); }
+        .table-row-warning { background: rgba(245, 158, 11, 0.05); }
+        .table-row-danger { background: rgba(239, 68, 68, 0.05); }
+        .table-row-info { background: rgba(59, 130, 246, 0.05); }
+        
+        /* 现代化侧边栏 */
         .sidebar-link {
             position: relative;
-            transition: all 0.2s;
+            transition: all var(--transition-fast);
+            border-radius: var(--radius-md);
+            margin: 4px 8px;
+            padding: 10px 16px;
         }
-        .sidebar-link::before {
+        .sidebar-link:hover {
+            background: var(--color-surface-100);
+            color: var(--color-surface-800);
+        }
+        .sidebar-link.active {
+            background: var(--color-accent-50);
+            color: var(--color-accent-700);
+            font-weight: 600;
+        }
+        .sidebar-link.active::before {
             content: '';
             position: absolute;
             left: 0;
             top: 50%;
             transform: translateY(-50%);
             width: 3px;
-            height: 0;
-            background: #3b82f6;
-            transition: height 0.2s;
-        }
-        .sidebar-link:hover::before,
-        .sidebar-link.active::before {
-            height: 100%;
-        }
-        .sidebar-link.active {
-            background: rgba(59, 130, 246, 0.1);
-            color: #2563eb;
+            height: 20px;
+            background: var(--color-accent-500);
+            border-radius: 0 3px 3px 0;
         }
         
-        /* 状态徽章 */
+        /* 现代化状态徽章 */
         .badge {
             display: inline-flex;
             align-items: center;
-            padding: 0.25rem 0.75rem;
+            padding: 4px 10px;
             border-radius: 9999px;
-            font-size: 0.75rem;
-            font-weight: 500;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.02em;
         }
-        .badge-success { background: #dcfce7; color: #166534; }
-        .badge-warning { background: #fef3c7; color: #92400e; }
-        .badge-danger { background: #fee2e2; color: #991b1b; }
-        .badge-info { background: #dbeafe; color: #1e40af; }
-        .badge-primary { background: #eff6ff; color: #1d4ed8; }
+        .badge-success { 
+            background: rgba(34, 197, 94, 0.1); 
+            color: var(--color-accent-700);
+            border: 1px solid rgba(34, 197, 94, 0.2);
+        }
+        .badge-warning { 
+            background: rgba(245, 158, 11, 0.1); 
+            color: #b45309;
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+        .badge-danger { 
+            background: rgba(239, 68, 68, 0.1); 
+            color: #b91c1c;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+        .badge-info { 
+            background: rgba(59, 130, 246, 0.1); 
+            color: #1d4ed8;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+        .badge-primary { 
+            background: rgba(14, 165, 233, 0.1); 
+            color: #0369a1;
+            border: 1px solid rgba(14, 165, 233, 0.2);
+        }
         
         /* 状态颜色 */
         .state-idle { color: #22c55e; }
@@ -185,30 +418,36 @@
         .state-PD { color: #f59e0b; }
         .state-S { color: #8b5cf6; }
         
-        /* 进度条 */
+        /* 现代化进度条 */
         .progress-bar {
-            height: 8px;
-            background: #e2e8f0;
-            border-radius: 4px;
+            height: 6px;
+            background: var(--color-surface-200);
+            border-radius: 3px;
             overflow: hidden;
         }
         .progress-fill {
             height: 100%;
-            border-radius: 4px;
+            border-radius: 3px;
             transition: width 0.5s ease;
         }
+        .progress-fill-success { background: linear-gradient(90deg, var(--color-accent-500), var(--color-accent-400)); }
+        .progress-fill-warning { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+        .progress-fill-danger { background: linear-gradient(90deg, #ef4444, #f87171); }
+        .progress-fill-info { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
         
-        /* 模态框 */
+        /* 现代化模态框 */
         .modal {
             display: none;
             position: fixed;
             inset: 0;
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(4px);
+            background: rgba(15, 23, 42, 0.4);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
             z-index: 1000;
             align-items: center;
             justify-content: center;
             animation: fadeIn 0.2s ease;
+            padding: 20px;
         }
         @keyframes fadeIn {
             from { opacity: 0; }
@@ -219,18 +458,37 @@
         }
         .modal-content {
             background: white;
-            border-radius: 1rem;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-            border: 1px solid #e2e8f0;
+            border-radius: var(--radius-xl);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--color-surface-200);
             max-width: 600px;
-            width: 90%;
-            max-height: 80vh;
+            width: 100%;
+            max-height: 85vh;
             overflow: hidden;
             animation: slideUp 0.3s ease;
         }
         @keyframes slideUp {
             from { transform: translateY(20px); opacity: 0; }
             to { transform: translateY(0); opacity: 1; }
+        }
+        .modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--color-surface-100);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .modal-body {
+            padding: 24px;
+            overflow-y: auto;
+            max-height: calc(85vh - 140px);
+        }
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid var(--color-surface-100);
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
         }
         
         /* 侧边抽屉 - 作业详情 */
@@ -330,17 +588,42 @@
             margin: 20px 0;
         }
         
-        /* 加载动画 */
+        /* 现代化加载动画 */
         .spinner {
             width: 24px;
             height: 24px;
-            border: 2px solid #e2e8f0;
-            border-top-color: #3b82f6;
+            border: 2px solid var(--color-surface-200);
+            border-top-color: var(--color-accent-500);
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
         @keyframes spin {
             to { transform: rotate(360deg); }
+        }
+        
+        /* 脉冲加载 */
+        .spinner-pulse {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--color-accent-500);
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(0.8); opacity: 0.5; }
+            50% { transform: scale(1); opacity: 1; }
+        }
+        
+        /* 骨架屏 */
+        .skeleton {
+            background: linear-gradient(90deg, var(--color-surface-100) 25%, var(--color-surface-200) 50%, var(--color-surface-100) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: var(--radius-sm);
+        }
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
         }
         
         /* Tab */
