@@ -257,8 +257,9 @@ function getRemainingSpace(used, hard) {
     const hardNum = parseSize(hard);
     if (hardNum === 0) return '无限制';
     const remaining = hardNum - usedNum;
-    if (remaining <= 0) return '0';
-    return formatSize(remaining);
+    if (remaining <= 0) return '0G';
+    // 转换为 GB 显示，保留2位小数
+    return remaining.toFixed(2) + 'G';
 }
 
 function renderQuotaTable(data, tbodyId) {
