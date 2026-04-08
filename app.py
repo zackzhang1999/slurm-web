@@ -2766,10 +2766,13 @@ def parse_sacct_stats(hours=24):
             parts = line.split('|')
             if len(parts) >= 4:
                 state, exit_code, partition, user = parts[:4]
-                stats['total'] += 1
                 state_upper = state.upper()
+                # 剔除正在运行和排队的任务
+                if state_upper in ['RUNNING', 'R', 'PENDING', 'PD', 'SUSPENDED', 'S']:
+                    continue
+                stats['total'] += 1
                 if state_upper in ['COMPLETED', 'CD']: stats['completed'] += 1
-                elif state_upper in ['FAILED', 'F', 'TIMEOUT', 'TO', 'CANCELLED', 'CA']: stats['failed'] += 1
+                elif state_upper in ['FAILED', 'F', 'TIMEOUT', 'TO', 'CANCELLED', 'CA', 'BOOT_FAIL', 'BF', 'NODE_FAIL', 'NF', 'PREEMPTED', 'PR', 'SPECIAL_EXIT', 'SE']: stats['failed'] += 1
                 
                 if partition not in stats['partitions']: 
                     stats['partitions'][partition] = {'jobs': 0, 'cpu_hours': 0}
@@ -3231,6 +3234,10 @@ def parse_resource_efficiency(hours=24):
                     cpu_time = parts[1]
                     elapsed = parts[2]
                     state = parts[3].upper()
+                    
+                    # 剔除正在运行和排队的任务
+                    if state in ['RUNNING', 'R', 'PENDING', 'PD', 'SUSPENDED', 'S']:
+                        continue
                     
                     # Parse CPU time to hours
                     cpu_hours = 0
