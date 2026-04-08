@@ -3220,7 +3220,7 @@ def parse_resource_efficiency(hours=24):
     total_cpus = 0
     used_cpu_hours = 0
     completed_jobs = 0
-    failed_jobs = 0
+    total_jobs = 0
     
     if output and not output.startswith("Error"):
         for line in output.strip().split('\n'):
@@ -3241,21 +3241,22 @@ def parse_resource_efficiency(hours=24):
                     
                     total_cpus += req_cpus
                     used_cpu_hours += cpu_hours
+                    total_jobs += 1
                     
                     if state in ['COMPLETED', 'CD']:
                         completed_jobs += 1
-                    elif state in ['FAILED', 'F', 'TIMEOUT', 'TO']:
-                        failed_jobs += 1
                 except:
                     pass
     
-    success_rate = round(completed_jobs / (completed_jobs + failed_jobs) * 100, 1) if (completed_jobs + failed_jobs) > 0 else 0
+    # 成功率 = 已完成 / 总数（除已完成外，其他都算作失败）
+    success_rate = round(completed_jobs / total_jobs * 100, 1) if total_jobs > 0 else 0
+    failed_jobs = total_jobs - completed_jobs
     
     return {
         'success_rate': success_rate,
         'completed_jobs': completed_jobs,
         'failed_jobs': failed_jobs,
-        'total_jobs': completed_jobs + failed_jobs,
+        'total_jobs': total_jobs,
         'cpu_utilization': round(used_cpu_hours / max(total_cpus, 1) * 100, 1) if total_cpus > 0 else 0
     }
 
