@@ -1,0 +1,1473 @@
+{% extends "base.html" %}
+
+{% block title %}机柜布局 - Amax 集群监控系统{% endblock %}
+{% block page_title %}机柜布局{% endblock %}
+{% block page_subtitle %}设备可视化与管理{% endblock %}
+
+{% block content %}
+<div class="h-full flex flex-col">
+    <!-- 工具栏 -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <button onclick="openAddCabinetModal()" class="btn-primary flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors">
+                    <i class="fas fa-plus"></i>
+                    <span>添加机柜</span>
+                </button>
+                <button onclick="refreshAllServerStatus()" class="btn-secondary flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors">
+                    <i class="fas fa-sync-alt"></i>
+                    <span>刷新状态</span>
+                </button>
+            </div>
+            <div class="flex items-center gap-3 text-sm flex-wrap">
+                <div class="flex items-center gap-1">
+                    <span class="w-2.5 h-2.5 rounded-full bg-success-500"></span>
+                    <span class="text-slate-600">正常</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <span class="w-2.5 h-2.5 rounded-full bg-warning-500"></span>
+                    <span class="text-slate-600">负载</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <span class="w-2.5 h-2.5 rounded-full bg-danger-500"></span>
+                    <span class="text-slate-600">故障</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <span class="w-2.5 h-2.5 rounded-full bg-slate-300"></span>
+                    <span class="text-slate-600">离线</span>
+                </div>
+                <div class="h-4 w-px bg-slate-300 mx-1"></div>
+                <div class="flex items-center gap-1">
+                    <i class="fas fa-network-wired text-purple-500 text-xs"></i>
+                    <span class="text-slate-600">交换机</span>
+                </div>
+                <div class="flex items-center gap-1">
+                    <i class="fas fa-bolt text-orange-500 text-xs"></i>
+                    <span class="text-slate-600">PDU</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 机柜列表容器 -->
+    <div id="cabinets-container" class="flex-1 overflow-auto">
+        <div class="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6">
+            <!-- 机柜卡片将通过JavaScript动态生成 -->
+        </div>
+    </div>
+
+    <!-- 空状态提示 -->
+    <div id="empty-state" class="hidden flex-1 flex flex-col items-center justify-center text-center p-12">
+        <div class="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+            <i class="fas fa-server text-slate-400 text-4xl"></i>
+        </div>
+        <h3 class="text-lg font-semibold text-slate-700 mb-2">暂无机柜</h3>
+        <p class="text-slate-500 mb-6">点击上方"添加机柜"按钮创建您的第一个机柜</p>
+        <button onclick="openAddCabinetModal()" class="btn-primary px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors">
+            添加机柜
+        </button>
+    </div>
+</div>
+
+<!-- 添加/编辑机柜模态框 -->
+<div id="cabinet-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden items-center justify-center">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+            <h3 id="cabinet-modal-title" class="text-lg font-semibold text-slate-800">添加机柜</h3>
+            <button onclick="closeCabinetModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+        <div class="p-6">
+            <form id="cabinet-form" onsubmit="saveCabinet(event)">
+                <input type="hidden" id="cabinet-id">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-slate-700 mb-2">机柜名称</label>
+                    <input type="text" id="cabinet-name" required
+                        class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all"
+                        placeholder="例如：A区-01号机柜">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-slate-700 mb-2">机柜高度 (U)</label>
+                    <select id="cabinet-height" required
+                        class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all">
+                        <option value="42">42U (标准机柜)</option>
+                        <option value="47">47U (大型机柜)</option>
+                        <option value="24">24U (中型机柜)</option>
+                        <option value="12">12U (小型机柜)</option>
+                    </select>
+                </div>
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-slate-700 mb-2">位置描述</label>
+                    <input type="text" id="cabinet-location"
+                        class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all"
+                        placeholder="例如：机房A区第3排">
+                </div>
+                <div class="flex gap-3">
+                    <button type="button" onclick="closeCabinetModal()"
+                        class="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors">
+                        取消
+                    </button>
+                    <button type="submit"
+                        class="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors">
+                        保存
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 添加/编辑设备模态框 -->
+<div id="server-modal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 hidden items-center justify-center">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
+        <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+            <h3 id="server-modal-title" class="text-lg font-semibold text-slate-800">添加设备</h3>
+            <button onclick="closeServerModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+        <div class="p-6">
+            <form id="server-form" onsubmit="saveServer(event)">
+                <input type="hidden" id="server-id">
+                <input type="hidden" id="server-cabinet-id">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-slate-700 mb-2">设备类型</label>
+                    <select id="server-device-type" required onchange="onDeviceTypeChange()"
+                        class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all">
+                        <option value="server">📡 服务器 (Server)</option>
+                        <option value="switch">🔗 交换机 (Switch)</option>
+                        <option value="pdu">⚡ PDU电源</option>
+                        <option value="kvm">💻 KVM切换器</option>
+                        <option value="router">🔄 路由器 (Router)</option>
+                        <option value="storage">💾 存储设备 (Storage)</option>
+                        <option value="firewall">🔒 防火墙 (Firewall)</option>
+                        <option value="other">📦 其他设备</option>
+                    </select>
+                </div>
+                <div class="mb-4" id="server-name-container">
+                    <label class="block text-sm font-medium text-slate-700 mb-2">设备名称</label>
+                    <select id="server-name-select" required
+                        class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all">
+                        <option value="">选择节点</option>
+                    </select>
+                    <input type="text" id="server-name-input" required
+                        class="hidden w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all"
+                        placeholder="例如：Core-Switch-01">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-slate-700 mb-2">设备规格</label>
+                    <select id="server-unit" required
+                        class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all">
+                        <option value="1">1U</option>
+                        <option value="2">2U</option>
+                        <option value="4">4U</option>
+                        <option value="6">6U</option>
+                        <option value="8">8U</option>
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-slate-700 mb-2">起始U位</label>
+                    <input type="number" id="server-start-u" required min="1"
+                        class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all"
+                        placeholder="例如：1">
+                    <p class="text-xs text-slate-500 mt-1">从机柜底部开始的U位编号</p>
+                </div>
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-slate-700 mb-2">备注</label>
+                    <input type="text" id="server-comment"
+                        class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all"
+                        placeholder="可选">
+                </div>
+                <div class="flex gap-3">
+                    <button type="button" onclick="closeServerModal()"
+                        class="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors">
+                        取消
+                    </button>
+                    <button type="submit"
+                        class="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors">
+                        保存
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 服务器详情/状态悬浮提示 -->
+<div id="server-tooltip" class="fixed z-50 hidden bg-white rounded-xl shadow-xl border border-slate-200 p-4 min-w-[280px] pointer-events-none">
+    <div class="flex items-center gap-3 mb-3">
+        <div id="tooltip-status-icon" class="w-10 h-10 rounded-lg flex items-center justify-center">
+            <i class="fas fa-server text-lg"></i>
+        </div>
+        <div>
+            <h4 id="tooltip-server-name" class="font-semibold text-slate-800">--</h4>
+            <p id="tooltip-server-status" class="text-sm text-slate-500">--</p>
+        </div>
+    </div>
+    <div class="space-y-2 text-sm">
+        <div class="flex justify-between">
+            <span class="text-slate-500">CPU 负载:</span>
+            <span id="tooltip-cpu" class="font-medium text-slate-700">--</span>
+        </div>
+        <div class="flex justify-between">
+            <span class="text-slate-500">已使用内存:</span>
+            <span id="tooltip-memory" class="font-medium text-slate-700">--</span>
+        </div>
+        <div class="flex justify-between">
+            <span class="text-slate-500">运行作业:</span>
+            <span id="tooltip-jobs" class="font-medium text-slate-700">--</span>
+        </div>
+        <div class="flex justify-between">
+            <span class="text-slate-500">位置:</span>
+            <span id="tooltip-location" class="font-medium text-slate-700">--</span>
+        </div>
+    </div>
+</div>
+
+<style>
+/* 机柜样式 */
+.cabinet-frame {
+    background: linear-gradient(145deg, #f1f5f9 0%, #e2e8f0 100%);
+    border: 2px solid #cbd5e1;
+    border-radius: 8px;
+    box-shadow: 
+        inset 0 2px 4px rgba(0,0,0,0.05),
+        0 4px 6px rgba(0,0,0,0.05);
+}
+
+.cabinet-unit {
+    height: 17px;
+    border-bottom: 1px solid #cbd5e1;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.cabinet-unit:last-child {
+    border-bottom: none;
+}
+
+.cabinet-unit-number {
+    position: absolute;
+    left: 3px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 7px;
+    color: #94a3b8;
+    width: 14px;
+    text-align: center;
+}
+
+.cabinet-unit-content {
+    margin-left: 20px;
+    height: 100%;
+    position: relative;
+}
+
+/* 服务器样式 */
+.server-unit {
+    position: absolute;
+    left: 0;
+    right: 6px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+    font-size: 8px;
+    font-weight: 500;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.server-unit:hover {
+    transform: translateX(2px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    z-index: 10;
+}
+
+.server-unit.status-normal {
+    background: linear-gradient(145deg, #dcfce7 0%, #bbf7d0 100%);
+    border: 1px solid #86efac;
+    color: #15803d;
+}
+
+.server-unit.status-warning {
+    background: linear-gradient(145deg, #fef3c7 0%, #fde68a 100%);
+    border: 1px solid #fbbf24;
+    color: #b45309;
+}
+
+.server-unit.status-error {
+    background: linear-gradient(145deg, #ef4444 0%, #dc2626 100%);
+    border: 1px solid #b91c1c;
+    color: #ffffff;
+}
+
+.server-unit.status-offline {
+    background: linear-gradient(145deg, #f1f5f9 0%, #e2e8f0 100%);
+    border: 1px solid #cbd5e1;
+    color: #64748b;
+}
+
+.server-unit-1u { height: 17px; }
+.server-unit-2u { height: 34px; }
+.server-unit-4u { height: 68px; }
+.server-unit-6u { height: 102px; }
+.server-unit-8u { height: 136px; }
+
+/* 服务器前面板细节 */
+.server-unit::before {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 60%;
+    background: rgba(255,255,255,0.5);
+    border-radius: 2px;
+}
+
+.server-unit::after {
+    content: '';
+    position: absolute;
+    right: 3px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.6;
+}
+
+/* 故障标记 */
+.server-error-badge {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 11px;
+    height: 11px;
+    background: #ef4444;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 6px;
+    z-index: 20;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+/* 各类设备样式 */
+.server-unit.device-server {
+    background: linear-gradient(145deg, #dbeafe 0%, #bfdbfe 100%);
+    border: 1px solid #60a5fa;
+    color: #1e40af;
+}
+
+.server-unit.device-switch {
+    background: linear-gradient(145deg, #f3e8ff 0%, #e9d5ff 100%);
+    border: 1px solid #c084fc;
+    color: #6b21a8;
+}
+
+.server-unit.device-pdu {
+    background: linear-gradient(145deg, #ffedd5 0%, #fed7aa 100%);
+    border: 1px solid #fb923c;
+    color: #9a3412;
+}
+
+.server-unit.device-kvm {
+    background: linear-gradient(145deg, #d1fae5 0%, #a7f3d0 100%);
+    border: 1px solid #34d399;
+    color: #065f46;
+}
+
+.server-unit.device-router {
+    background: linear-gradient(145deg, #fee2e2 0%, #fecaca 100%);
+    border: 1px solid #f87171;
+    color: #991b1b;
+}
+
+.server-unit.device-storage {
+    background: linear-gradient(145deg, #e0e7ff 0%, #c7d2fe 100%);
+    border: 1px solid #818cf8;
+    color: #3730a3;
+}
+
+.server-unit.device-firewall {
+    background: linear-gradient(145deg, #fef3c7 0%, #fde68a 100%);
+    border: 1px solid #fbbf24;
+    color: #92400e;
+}
+
+.server-unit.device-other {
+    background: linear-gradient(145deg, #f3f4f6 0%, #e5e7eb 100%);
+    border: 1px solid #9ca3af;
+    color: #4b5563;
+}
+
+/* 交换机前面板细节 - 显示网络接口样式 */
+.server-unit.device-switch::before {
+    background: rgba(255,255,255,0.6);
+    width: 2px;
+    box-shadow: 3px 0 0 rgba(255,255,255,0.4), 6px 0 0 rgba(255,255,255,0.2);
+}
+
+/* PDU前面板细节 - 显示插座样式 */
+.server-unit.device-pdu::before {
+    background: rgba(255,255,255,0.7);
+    width: 6px;
+    border-radius: 1px;
+}
+
+/* 空U位悬停效果 */
+.cabinet-unit-empty:hover {
+    background: rgba(14, 165, 233, 0.1);
+    cursor: pointer;
+}
+
+.cabinet-unit-empty:hover .cabinet-unit-content::after {
+    content: '+';
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #0ea5e9;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+/* 设备删除按钮 */
+.device-delete-btn {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 11px;
+    height: 11px;
+    background: #ef4444;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 6px;
+    z-index: 20;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.server-unit:hover .device-delete-btn {
+    opacity: 1;
+}
+
+.device-delete-btn:hover {
+    transform: scale(1.2);
+    background: #dc2626;
+}
+</style>
+
+<script>
+// 全局数据存储
+let cabinets = [];
+let servers = [];
+let nodes = [];
+let serverStatuses = {};
+let currentUser = null;
+
+// 页面加载时初始化
+document.addEventListener('DOMContentLoaded', async function() {
+    await loadCurrentUser();
+    loadCabinets();
+    loadNodes();
+    refreshAllServerStatus();
+    updateUIForUserRole();
+});
+
+// 加载当前用户信息
+async function loadCurrentUser() {
+    try {
+        const response = await fetch('/api/current-user', {
+            credentials: 'include'
+        });
+        if (response.ok) {
+            const data = await response.json();
+            if (data.logged_in) {
+                currentUser = data;
+            } else {
+                currentUser = null;
+            }
+        }
+    } catch (error) {
+        console.error('加载用户信息失败:', error);
+    }
+}
+
+// 检查是否是管理员
+function isAdmin() {
+    return currentUser && currentUser.user_type === 'admin';
+}
+
+// 根据用户角色更新UI
+function updateUIForUserRole() {
+    const isAdminUser = isAdmin();
+    
+    // 隐藏/显示工具栏按钮
+    const addCabinetBtn = document.querySelector('button[onclick="openAddCabinetModal()"]');
+    if (addCabinetBtn) {
+        addCabinetBtn.style.display = isAdminUser ? 'flex' : 'none';
+    }
+    
+    // 重新渲染机柜列表以更新操作按钮
+    renderCabinets();
+}
+
+// 加载机柜数据
+async function loadCabinets() {
+    try {
+        const response = await fetch('/api/cabinets', {
+            credentials: 'include'
+        });
+        if (response.ok) {
+            const data = await response.json();
+            cabinets = data.cabinets || [];
+            servers = data.servers || [];
+            renderCabinets();
+        }
+    } catch (error) {
+        console.error('加载机柜数据失败:', error);
+        showToast('加载机柜数据失败', 'error');
+    }
+}
+
+// 加载节点列表
+async function loadNodes() {
+    try {
+        const response = await fetch('/api/nodes', {
+            credentials: 'include'
+        });
+        if (response.ok) {
+            const data = await response.json();
+            // API直接返回节点列表数组
+            nodes = Array.isArray(data) ? data : (data.nodes || []);
+            populateNodeSelect();
+        }
+    } catch (error) {
+        console.error('加载节点列表失败:', error);
+    }
+}
+
+// 填充节点选择下拉框
+function populateNodeSelect() {
+    const select = document.getElementById('server-name-select');
+    select.innerHTML = '<option value="">选择节点</option>';
+    nodes.forEach(node => {
+        const option = document.createElement('option');
+        option.value = node.name;
+        option.textContent = `${node.name} (${node.cpus}核, ${formatMemory(node.memory)})`;
+        select.appendChild(option);
+    });
+}
+
+// 设备类型切换时更新名称输入方式
+function onDeviceTypeChange() {
+    const deviceType = document.getElementById('server-device-type').value;
+    const selectEl = document.getElementById('server-name-select');
+    const inputEl = document.getElementById('server-name-input');
+    
+    if (deviceType === 'server') {
+        // 服务器从节点列表选择
+        selectEl.classList.remove('hidden');
+        inputEl.classList.add('hidden');
+        selectEl.required = true;
+        inputEl.required = false;
+    } else {
+        // 其他设备手动输入名称
+        selectEl.classList.add('hidden');
+        inputEl.classList.remove('hidden');
+        selectEl.required = false;
+        inputEl.required = true;
+    }
+}
+
+// 渲染机柜列表
+function renderCabinets() {
+    const container = document.querySelector('#cabinets-container .grid');
+    const emptyState = document.getElementById('empty-state');
+    
+    if (cabinets.length === 0) {
+        container.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+    }
+    
+    emptyState.classList.add('hidden');
+    container.innerHTML = cabinets.map(cabinet => renderCabinetCard(cabinet)).join('');
+}
+
+// 获取设备图标
+function getDeviceIcon(deviceType) {
+    const icons = {
+        'server': 'fa-server',
+        'switch': 'fa-network-wired',
+        'pdu': 'fa-bolt',
+        'kvm': 'fa-desktop',
+        'router': 'fa-route',
+        'storage': 'fa-hdd',
+        'firewall': 'fa-shield-alt',
+        'other': 'fa-box'
+    };
+    return icons[deviceType] || 'fa-box';
+}
+
+// 获取设备类型名称
+function getDeviceTypeName(deviceType) {
+    const names = {
+        'server': '服务器',
+        'switch': '交换机',
+        'pdu': 'PDU电源',
+        'kvm': 'KVM切换器',
+        'router': '路由器',
+        'storage': '存储设备',
+        'firewall': '防火墙',
+        'other': '其他设备'
+    };
+    return names[deviceType] || '设备';
+}
+
+// 获取设备样式类
+function getDeviceStyleClass(deviceType) {
+    const classes = {
+        'server': 'device-server',
+        'switch': 'device-switch',
+        'pdu': 'device-pdu',
+        'kvm': 'device-kvm',
+        'router': 'device-router',
+        'storage': 'device-storage',
+        'firewall': 'device-firewall',
+        'other': 'device-other'
+    };
+    return classes[deviceType] || 'device-other';
+}
+
+// 渲染单个机柜卡片
+function renderCabinetCard(cabinet) {
+    const cabinetServers = servers.filter(s => s.cabinet_id === cabinet.id);
+    const height = parseInt(cabinet.height) || 42;
+    
+    // 创建U位占用映射：记录每个U位是否被占用，以及被哪个设备占用
+    const uOccupancy = {};
+    cabinetServers.forEach(server => {
+        const startU = parseInt(server.start_u) || 1;
+        const unitHeight = parseInt(server.unit) || 1;
+        // 设备向上占用：从 startU 到 startU + unitHeight - 1
+        for (let i = 0; i < unitHeight; i++) {
+            const u = startU + i;
+            if (u <= height) {
+                uOccupancy[u] = server.id;
+            }
+        }
+    });
+    
+    let unitsHtml = '';
+    for (let u = height; u >= 1; u--) {
+        const occupyingServerId = uOccupancy[u];
+        const server = occupyingServerId ? cabinetServers.find(s => s.id === occupyingServerId) : null;
+        
+        if (server && server.start_u === u) {
+            // 这是设备的起始U位，渲染设备卡片
+            const deviceType = server.device_type || 'server';
+            let status = serverStatuses[server.name] || { state: 'unknown', cpu_load: 0, jobs: 0 };
+            // 确保状态字段有效
+            if (!status.state) {
+                status = { ...status, state: 'unknown' };
+            }
+            const statusClass = deviceType === 'server' ? getStatusClass(status.state, status.jobs || 0) : 'device';
+            const unitHeight = parseInt(server.unit) || 1;
+            const serverName = server.name.length > 12 ? server.name.substring(0, 12) + '...' : server.name;
+            const deviceIcon = getDeviceIcon(deviceType);
+            const deviceStyleClass = getDeviceStyleClass(deviceType);
+            const isAdminUser = isAdmin();
+            
+            unitsHtml += `
+                <div class="cabinet-unit" style="height: ${unitHeight * 17}px;">
+                    <span class="cabinet-unit-number">${u}</span>
+                    <div class="cabinet-unit-content">
+                        <div class="server-unit server-unit-${unitHeight}u ${deviceType === 'server' ? 'status-' + statusClass : deviceStyleClass}" 
+                             data-server-id="${server.id}"
+                             ${isAdminUser ? `onclick="editServer('${server.id}')"` : ''}
+                             onmouseenter="showServerTooltip(event, '${server.id}')"
+                             onmouseleave="hideServerTooltip()">
+                            <i class="fas ${deviceIcon} mr-2"></i>
+                            <span class="truncate">${serverName}</span>
+                            ${deviceType === 'server' && statusClass === 'error' ? '<div class="server-error-badge"><i class="fas fa-exclamation"></i></div>' : ''}
+                            ${isAdminUser ? `<div class="device-delete-btn" onclick="event.stopPropagation(); deleteServer('${server.id}')" title="删除设备"><i class="fas fa-times"></i></div>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (!occupyingServerId) {
+            // 这是空闲U位，渲染空U位槽
+            const isAdminUser = isAdmin();
+            if (isAdminUser) {
+                unitsHtml += `
+                    <div class="cabinet-unit cabinet-unit-empty" onclick="openAddServerModal('${cabinet.id}', ${u})">
+                        <span class="cabinet-unit-number">${u}</span>
+                        <div class="cabinet-unit-content"></div>
+                    </div>
+                `;
+            } else {
+                unitsHtml += `
+                    <div class="cabinet-unit">
+                        <span class="cabinet-unit-number">${u}</span>
+                        <div class="cabinet-unit-content"></div>
+                    </div>
+                `;
+            }
+        }
+        // 如果被占用但不是起始U位，则不渲染任何内容（跳过）
+    }
+    
+    // 统计各类设备数量
+    const deviceCounts = {};
+    cabinetServers.forEach(s => {
+        const type = s.device_type || 'server';
+        deviceCounts[type] = (deviceCounts[type] || 0) + 1;
+    });
+    
+    let deviceCountText = [];
+    const typeOrder = ['server', 'switch', 'pdu', 'kvm', 'router', 'storage', 'firewall', 'other'];
+    typeOrder.forEach(type => {
+        if (deviceCounts[type]) {
+            deviceCountText.push(`${deviceCounts[type]} ${getDeviceTypeName(type)}`);
+        }
+    });
+    
+    const isAdminUser = isAdmin();
+    
+    return `
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-server text-primary-600"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-slate-800">${cabinet.name}</h3>
+                        <p class="text-xs text-slate-500">${cabinet.location || '未设置位置'} · ${height}U</p>
+                    </div>
+                </div>
+                ${isAdminUser ? `
+                <div class="flex items-center gap-2">
+                    <button onclick="openEditCabinetModal('${cabinet.id}')" 
+                            class="p-2 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                            title="编辑机柜">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button onclick="deleteCabinet('${cabinet.id}')" 
+                            class="p-2 text-slate-400 hover:text-danger-600 hover:bg-danger-50 rounded-lg transition-colors"
+                            title="删除机柜">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+                ` : ''}
+            </div>
+            <div class="p-4">
+                <div class="cabinet-frame">
+                    ${unitsHtml}
+                </div>
+            </div>
+            <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-sm">
+                <span class="text-slate-500" title="${deviceCountText.join('、')}">
+                    <i class="fas fa-server mr-1"></i>
+                    ${deviceCountText.length > 0 ? deviceCountText.join('、') : '无设备'}
+                </span>
+                ${isAdminUser ? `
+                <button onclick="openAddServerModal('${cabinet.id}')" 
+                        class="text-primary-600 hover:text-primary-700 font-medium">
+                    <i class="fas fa-plus mr-1"></i>添加设备
+                </button>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+// 获取状态样式类
+function getStatusClass(state, jobs = 0) {
+    // 处理复合状态，如 idle+drain, alloc+drain 等
+    const stateLower = (state || '').toLowerCase();
+    
+    // 调试日志
+    if (stateLower.includes('node02') || state === 'IDLE' || state === 'idle') {
+        console.log('[DEBUG] getStatusClass:', { state, jobs, stateLower });
+    }
+    
+    // 优先检查故障状态（drain, down, fail）
+    if (stateLower.includes('drain') || stateLower.includes('down') || stateLower.includes('fail')) {
+        return 'error';
+    }
+    // 其次检查离线状态
+    if (stateLower.includes('unknown') || stateLower.includes('offline')) {
+        return 'offline';
+    }
+    // 如果有运行中的作业，显示为负载（警告色）
+    if (jobs > 0) {
+        return 'warning';
+    }
+    // 正常工作状态
+    if (stateLower.includes('idle') || stateLower.includes('alloc') || stateLower.includes('mix')) {
+        return 'normal';
+    }
+    // 负载/警告状态
+    return 'warning';
+}
+
+// 显示设备提示
+async function showServerTooltip(event, serverId) {
+    const server = servers.find(s => s.id === serverId);
+    if (!server) return;
+    
+    const deviceType = server.device_type || 'server';
+    const deviceTypeName = getDeviceTypeName(deviceType);
+    const deviceIcon = getDeviceIcon(deviceType);
+    
+    const tooltip = document.getElementById('server-tooltip');
+    
+    // 显示加载状态
+    document.getElementById('tooltip-server-name').textContent = server.name;
+    document.getElementById('tooltip-server-status').textContent = deviceTypeName;
+    document.getElementById('tooltip-cpu').textContent = '--';
+    document.getElementById('tooltip-memory').textContent = '--';
+    document.getElementById('tooltip-jobs').textContent = '--';
+    document.getElementById('tooltip-location').textContent = `U${server.start_u}-${server.start_u + parseInt(server.unit) - 1}`;
+    
+    // 更新图标
+    const statusIcon = document.getElementById('tooltip-status-icon');
+    statusIcon.className = `w-10 h-10 rounded-lg flex items-center justify-center bg-slate-100`;
+    statusIcon.innerHTML = `<i class="fas ${deviceIcon} text-lg text-slate-600"></i>`;
+    
+    tooltip.classList.remove('hidden');
+    
+    const rect = event.target.getBoundingClientRect();
+    tooltip.style.left = `${Math.min(rect.right + 10, window.innerWidth - 300)}px`;
+    tooltip.style.top = `${rect.top}px`;
+    
+    // 非服务器设备显示基本信息即可
+    if (deviceType !== 'server') {
+        document.getElementById('tooltip-server-status').textContent = deviceTypeName;
+        document.getElementById('tooltip-cpu').textContent = '-';
+        document.getElementById('tooltip-memory').textContent = '-';
+        document.getElementById('tooltip-jobs').textContent = '-';
+        if (server.comment) {
+            document.getElementById('tooltip-server-status').textContent = `${deviceTypeName} · ${server.comment}`;
+        }
+        return;
+    }
+    
+    try {
+        // 调用节点详情API获取实时数据
+        const response = await fetch(`/api/node/${server.name}`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            const details = await response.json();
+            
+            // 调试：打印所有返回的字段
+            console.log('Node details for', server.name, ':', details);
+            
+            // 解析状态
+            const state = (details.state || 'unknown').toLowerCase();
+            
+            // 解析CPU信息 - 尝试所有可能的字段名
+            let cpuLoad = 0;
+            let allocCpus = 0;
+            let totalCpus = 0;
+            
+            // 尝试所有可能的分配CPU字段名
+            const allocCpuFields = ['alloccpus', 'alloc_cpus', 'AllocCPUs', 'allocated_cpus', 'cpu_alloc', 'allocCpus'];
+            for (const field of allocCpuFields) {
+                if (details[field] !== undefined && details[field] !== '') {
+                    allocCpus = parseInt(details[field]) || 0;
+                    if (allocCpus > 0) break;
+                }
+            }
+            
+            // 尝试所有可能的总CPU字段名
+            const totalCpuFields = ['cputot', 'cpu_tot', 'CPUTot', 'cpus', 'Cpus', 'total_cpus', 'cpustotal', 'cpu_total'];
+            for (const field of totalCpuFields) {
+                if (details[field] !== undefined && details[field] !== '') {
+                    totalCpus = parseInt(details[field]) || 0;
+                    if (totalCpus > 0) break;
+                }
+            }
+            
+            if (totalCpus > 0) {
+                cpuLoad = (allocCpus / totalCpus) * 100;
+            }
+            
+            // 解析内存信息 (单位是MB) - 尝试所有可能的字段名
+            let usedMem = 0;
+            let totalMem = 0;
+            
+            // 优先使用 usedmem (实际使用内存 = RealMemory - FreeMem)
+            // 如果没有 usedmem，则回退到 allocmem (已分配内存)
+            const usedMemFields = ['usedmem', 'used_mem', 'UsedMem', 'used_memory'];
+            for (const field of usedMemFields) {
+                if (details[field] !== undefined && details[field] !== '') {
+                    usedMem = parseInt(details[field]) || 0;
+                    if (usedMem > 0) break;
+                }
+            }
+            
+            // 如果没有找到 usedmem，则使用 allocmem 作为回退
+            if (usedMem === 0) {
+                const allocMemFields = ['allocmem', 'alloc_mem', 'AllocMem', 'allocated_memory'];
+                for (const field of allocMemFields) {
+                    if (details[field] !== undefined && details[field] !== '') {
+                        usedMem = parseInt(details[field]) || 0;
+                        if (usedMem > 0) break;
+                    }
+                }
+            }
+            
+            const totalMemFields = ['realtotalmemory', 'real_total_memory', 'RealMemory', 'real_memory', 'memory', 'Memory', 'total_memory'];
+            for (const field of totalMemFields) {
+                if (details[field] !== undefined && details[field] !== '') {
+                    totalMem = parseInt(details[field]) || 0;
+                    if (totalMem > 0) break;
+                }
+            }
+            
+            // 获取运行作业数 - 尝试所有可能的字段名
+            let jobsCount = 0;
+            const jobsFields = ['jobs', 'Jobs', 'joblist', 'job_list', 'running_jobs'];
+            for (const field of jobsFields) {
+                if (details[field] !== undefined && details[field] !== '' && details[field] !== 'N/A') {
+                    const jobsValue = details[field];
+                    // 如果是数字类型，直接使用
+                    if (typeof jobsValue === 'number') {
+                        jobsCount = jobsValue;
+                    } else {
+                        // 字符串类型，可能是逗号分隔的作业ID列表
+                        const jobsStr = String(jobsValue);
+                        // 先尝试解析为整数（如果是纯数字字符串）
+                        const parsedInt = parseInt(jobsStr, 10);
+                        if (!isNaN(parsedInt) && !jobsStr.includes(',')) {
+                            jobsCount = parsedInt;
+                        } else {
+                            // 逗号分隔的作业列表
+                            jobsCount = jobsStr.split(',').filter(j => j.trim() && j.trim() !== 'N/A').length;
+                        }
+                    }
+                    if (jobsCount > 0) break;
+                }
+            }
+            
+            // 更新显示
+            document.getElementById('tooltip-server-name').textContent = server.name;
+            document.getElementById('tooltip-server-status').textContent = getStatusText(state, jobsCount);
+            document.getElementById('tooltip-cpu').textContent = `${cpuLoad.toFixed(1)}% (${allocCpus}/${totalCpus}核)`;
+            document.getElementById('tooltip-memory').textContent = `${formatMemory(usedMem)} / ${formatMemory(totalMem)}`;
+            document.getElementById('tooltip-jobs').textContent = jobsCount;
+            
+            const statusIcon = document.getElementById('tooltip-status-icon');
+            statusIcon.className = `w-10 h-10 rounded-lg flex items-center justify-center ${getStatusBgClass(state, jobsCount)}`;
+            statusIcon.innerHTML = `<i class="fas fa-server text-lg ${getStatusTextClass(state, jobsCount)}"></i>`;
+            
+            // 更新服务器状态缓存，确保页面上的状态显示也能同步更新
+            serverStatuses[server.name] = {
+                state: state,
+                cpu_load: cpuLoad,
+                memory_used: usedMem,
+                memory_total: totalMem,
+                jobs: jobsCount,
+                alloc_cpus: allocCpus,
+                total_cpus: totalCpus
+            };
+            
+            // 不要重新渲染机柜，因为会导致工具提示被关闭
+            // 只更新当前服务器的状态显示
+            const serverElements = document.querySelectorAll(`.server-unit[data-server-id="${server.id}"]`);
+            serverElements.forEach(el => {
+                el.className = `server-unit server-unit-${server.unit}u status-${getStatusClass(state, jobsCount)}`;
+                if (getStatusClass(state, jobsCount) === 'error') {
+                    if (!el.querySelector('.server-error-badge')) {
+                        const errorBadge = document.createElement('div');
+                        errorBadge.className = 'server-error-badge';
+                        errorBadge.innerHTML = '<i class="fas fa-exclamation"></i>';
+                        el.appendChild(errorBadge);
+                    }
+                } else {
+                    const existingBadge = el.querySelector('.server-error-badge');
+                    if (existingBadge) {
+                        existingBadge.remove();
+                    }
+                }
+            });
+        } else {
+            // API调用失败，使用缓存的状态数据
+            const cachedStatus = serverStatuses[server.name];
+            if (cachedStatus) {
+                const cachedJobs = cachedStatus.jobs || 0;
+                document.getElementById('tooltip-server-status').textContent = getStatusText(cachedStatus.state, cachedJobs);
+                document.getElementById('tooltip-cpu').textContent = `${(cachedStatus.cpu_load || 0).toFixed(1)}%`;
+                document.getElementById('tooltip-memory').textContent = `${formatMemory(cachedStatus.memory_used || 0)} / ${formatMemory(cachedStatus.memory_total || 0)}`;
+                document.getElementById('tooltip-jobs').textContent = cachedJobs;
+            } else {
+                document.getElementById('tooltip-server-status').textContent = '无法获取数据';
+            }
+        }
+    } catch (error) {
+        console.error('获取节点详情失败:', error);
+        document.getElementById('tooltip-server-status').textContent = '获取数据失败';
+    }
+}
+
+// 隐藏服务器提示
+function hideServerTooltip() {
+    document.getElementById('server-tooltip').classList.add('hidden');
+}
+
+// 获取状态文本
+function getStatusText(state, jobs = 0) {
+    const stateLower = state.toLowerCase();
+    
+    // 处理复合状态，如 idle+drain, alloc+drain 等
+    // 优先检查故障状态
+    if (stateLower.includes('drain')) {
+        return '排空';
+    }
+    if (stateLower.includes('down')) {
+        return '故障';
+    }
+    if (stateLower.includes('fail')) {
+        return '失败';
+    }
+    // 其次检查离线状态
+    if (stateLower.includes('unknown')) {
+        return '未知';
+    }
+    if (stateLower.includes('offline')) {
+        return '离线';
+    }
+    // 如果有运行中的作业，显示为负载
+    if (jobs > 0) {
+        return '负载';
+    }
+    // 正常工作状态
+    if (stateLower.includes('mix')) {
+        return '混合';
+    }
+    if (stateLower.includes('alloc')) {
+        return '已分配';
+    }
+    if (stateLower.includes('idle')) {
+        return '空闲';
+    }
+    
+    return state;
+}
+
+// 获取状态背景类
+function getStatusBgClass(state, jobs = 0) {
+    const stateLower = state.toLowerCase();
+    
+    // 处理复合状态，如 idle+drain, alloc+drain 等
+    // 优先检查故障状态
+    if (stateLower.includes('drain') || stateLower.includes('down') || stateLower.includes('fail')) {
+        return 'bg-danger-100';
+    }
+    // 其次检查离线状态
+    if (stateLower.includes('unknown') || stateLower.includes('offline')) {
+        return 'bg-slate-100';
+    }
+    // 如果有运行中的作业，显示为负载（警告色）
+    if (jobs > 0) {
+        return 'bg-warning-100';
+    }
+    // 正常工作状态
+    if (stateLower.includes('idle') || stateLower.includes('alloc') || stateLower.includes('mix')) {
+        return 'bg-success-100';
+    }
+    // 负载/警告状态
+    return 'bg-warning-100';
+}
+
+// 获取状态文本类
+function getStatusTextClass(state, jobs = 0) {
+    const stateLower = state.toLowerCase();
+    
+    // 处理复合状态，如 idle+drain, alloc+drain 等
+    // 优先检查故障状态
+    if (stateLower.includes('drain') || stateLower.includes('down') || stateLower.includes('fail')) {
+        return 'text-danger-600';
+    }
+    // 其次检查离线状态
+    if (stateLower.includes('unknown') || stateLower.includes('offline')) {
+        return 'text-slate-600';
+    }
+    // 如果有运行中的作业，显示为负载（警告色）
+    if (jobs > 0) {
+        return 'text-warning-600';
+    }
+    // 正常工作状态
+    if (stateLower.includes('idle') || stateLower.includes('alloc') || stateLower.includes('mix')) {
+        return 'text-success-600';
+    }
+    // 负载/警告状态
+    return 'text-warning-600';
+}
+
+// 刷新所有服务器状态
+async function refreshAllServerStatus() {
+    try {
+        const response = await fetch('/api/nodes/status', {
+            credentials: 'include'
+        });
+        if (response.ok) {
+            const data = await response.json();
+            serverStatuses = data.statuses || {};
+            renderCabinets();
+        }
+    } catch (error) {
+        console.error('刷新服务器状态失败:', error);
+    }
+}
+
+// 机柜模态框操作
+function openAddCabinetModal() {
+    if (!isAdmin()) {
+        showToast('需要管理员权限', 'error');
+        return;
+    }
+    document.getElementById('cabinet-modal-title').textContent = '添加机柜';
+    document.getElementById('cabinet-form').reset();
+    document.getElementById('cabinet-id').value = '';
+    document.getElementById('cabinet-modal').classList.remove('hidden');
+    document.getElementById('cabinet-modal').classList.add('flex');
+}
+
+function openEditCabinetModal(cabinetId) {
+    if (!isAdmin()) {
+        showToast('需要管理员权限', 'error');
+        return;
+    }
+    const cabinet = cabinets.find(c => c.id === cabinetId);
+    if (!cabinet) return;
+    
+    document.getElementById('cabinet-modal-title').textContent = '编辑机柜';
+    document.getElementById('cabinet-id').value = cabinet.id;
+    document.getElementById('cabinet-name').value = cabinet.name;
+    document.getElementById('cabinet-height').value = cabinet.height;
+    document.getElementById('cabinet-location').value = cabinet.location || '';
+    document.getElementById('cabinet-modal').classList.remove('hidden');
+    document.getElementById('cabinet-modal').classList.add('flex');
+}
+
+function closeCabinetModal() {
+    document.getElementById('cabinet-modal').classList.add('hidden');
+    document.getElementById('cabinet-modal').classList.remove('flex');
+}
+
+// 保存机柜
+async function saveCabinet(event) {
+    event.preventDefault();
+    
+    const cabinetId = document.getElementById('cabinet-id').value;
+    const data = {
+        name: document.getElementById('cabinet-name').value,
+        height: parseInt(document.getElementById('cabinet-height').value),
+        location: document.getElementById('cabinet-location').value
+    };
+    
+    try {
+        const url = cabinetId ? `/api/cabinets/${cabinetId}` : '/api/cabinets';
+        const method = cabinetId ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+            showToast(cabinetId ? '机柜更新成功' : '机柜添加成功', 'success');
+            closeCabinetModal();
+            loadCabinets();
+        } else {
+            const error = await response.json();
+            if (response.status === 403) {
+                showToast('需要管理员权限', 'error');
+            } else {
+                showToast(error.message || '操作失败', 'error');
+            }
+        }
+    } catch (error) {
+        console.error('保存机柜失败:', error);
+        showToast('保存失败', 'error');
+    }
+}
+
+// 删除机柜
+async function deleteCabinet(cabinetId) {
+    const cabinet = cabinets.find(c => c.id === cabinetId);
+    const cabinetServers = servers.filter(s => s.cabinet_id === cabinetId);
+    
+    let confirmMessage = `确定要删除机柜 "${cabinet.name}" 吗？`;
+    if (cabinetServers.length > 0) {
+        confirmMessage += `\n\n注意：该机柜内有 ${cabinetServers.length} 个设备，删除后设备配置将丢失。`;
+    }
+    
+    if (!confirm(confirmMessage)) return;
+    
+    try {
+        const response = await fetch(`/api/cabinets/${cabinetId}`, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            showToast('机柜删除成功', 'success');
+            loadCabinets();
+        } else {
+            const error = await response.json();
+            if (response.status === 403) {
+                showToast('需要管理员权限', 'error');
+            } else {
+                showToast(error.message || '删除失败', 'error');
+            }
+        }
+    } catch (error) {
+        console.error('删除机柜失败:', error);
+        showToast('删除失败', 'error');
+    }
+}
+
+// 删除设备
+async function deleteServer(serverId) {
+    const server = servers.find(s => s.id === serverId);
+    if (!server) return;
+    
+    const deviceType = server.device_type || 'server';
+    const typeName = getDeviceTypeName(deviceType);
+    
+    if (!confirm(`确定要删除${typeName} "${server.name}" 吗？`)) return;
+    
+    try {
+        const response = await fetch(`/api/servers/${serverId}`, {
+            method: 'DELETE',
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            showToast(`${typeName}删除成功`, 'success');
+            loadCabinets();
+        } else {
+            const error = await response.json();
+            if (response.status === 403) {
+                showToast('需要管理员权限', 'error');
+            } else {
+                showToast(error.message || '删除失败', 'error');
+            }
+        }
+    } catch (error) {
+        console.error('删除设备失败:', error);
+        showToast('删除失败', 'error');
+    }
+}
+
+// 服务器模态框操作
+function openAddServerModal(cabinetId, startU = 1) {
+    if (!isAdmin()) {
+        showToast('需要管理员权限', 'error');
+        return;
+    }
+    document.getElementById('server-modal-title').textContent = '添加设备';
+    document.getElementById('server-form').reset();
+    document.getElementById('server-id').value = '';
+    document.getElementById('server-cabinet-id').value = cabinetId;
+    document.getElementById('server-start-u').value = startU;
+    document.getElementById('server-device-type').value = 'server';
+    onDeviceTypeChange(); // 重置名称输入方式
+    document.getElementById('server-modal').classList.remove('hidden');
+    document.getElementById('server-modal').classList.add('flex');
+}
+
+function editServer(serverId) {
+    if (!isAdmin()) {
+        showToast('需要管理员权限', 'error');
+        return;
+    }
+    const server = servers.find(s => s.id === serverId);
+    if (!server) return;
+    
+    const deviceType = server.device_type || 'server';
+    const typeName = getDeviceTypeName(deviceType);
+    
+    document.getElementById('server-modal-title').textContent = `编辑${typeName}`;
+    document.getElementById('server-id').value = server.id;
+    document.getElementById('server-cabinet-id').value = server.cabinet_id;
+    document.getElementById('server-device-type').value = deviceType;
+    
+    // 根据设备类型设置名称字段
+    onDeviceTypeChange();
+    
+    if (deviceType === 'server') {
+        document.getElementById('server-name-select').value = server.name;
+        document.getElementById('server-name-input').value = '';
+    } else {
+        document.getElementById('server-name-select').value = '';
+        document.getElementById('server-name-input').value = server.name;
+    }
+    
+    document.getElementById('server-unit').value = server.unit;
+    document.getElementById('server-start-u').value = server.start_u;
+    document.getElementById('server-comment').value = server.comment || '';
+    document.getElementById('server-modal').classList.remove('hidden');
+    document.getElementById('server-modal').classList.add('flex');
+}
+
+function closeServerModal() {
+    document.getElementById('server-modal').classList.add('hidden');
+    document.getElementById('server-modal').classList.remove('flex');
+}
+
+// 保存服务器
+async function saveServer(event) {
+    event.preventDefault();
+    
+    const serverId = document.getElementById('server-id').value;
+    const cabinetId = document.getElementById('server-cabinet-id').value;
+    const deviceType = document.getElementById('server-device-type').value;
+    
+    // 根据设备类型选择名称字段
+    let deviceName;
+    if (deviceType === 'server') {
+        deviceName = document.getElementById('server-name-select').value;
+    } else {
+        deviceName = document.getElementById('server-name-input').value.trim();
+    }
+    
+    if (!deviceName) {
+        showToast('请输入设备名称', 'error');
+        return;
+    }
+    
+    const data = {
+        cabinet_id: cabinetId,
+        name: deviceName,
+        unit: parseInt(document.getElementById('server-unit').value),
+        start_u: parseInt(document.getElementById('server-start-u').value),
+        comment: document.getElementById('server-comment').value,
+        device_type: deviceType
+    };
+    
+    const typeName = getDeviceTypeName(deviceType);
+    
+    // 验证U位是否冲突
+    const cabinet = cabinets.find(c => c.id === cabinetId);
+    if (cabinet) {
+        const endU = data.start_u + data.unit - 1;
+        if (endU > cabinet.height) {
+            showToast(`${typeName}超出机柜高度范围 (最大 ${cabinet.height}U)`, 'error');
+            return;
+        }
+        
+        const conflictingServer = servers.find(s => {
+            if (s.cabinet_id !== cabinetId) return false;
+            if (serverId && s.id === serverId) return false;
+            const sEndU = s.start_u + parseInt(s.unit) - 1;
+            return (data.start_u >= s.start_u && data.start_u <= sEndU) ||
+                   (endU >= s.start_u && endU <= sEndU) ||
+                   (data.start_u <= s.start_u && endU >= sEndU);
+        });
+        
+        if (conflictingServer) {
+            showToast(`U位 ${data.start_u}-${endU} 与设备 "${conflictingServer.name}" 冲突`, 'error');
+            return;
+        }
+    }
+    
+    try {
+        const url = serverId ? `/api/servers/${serverId}` : '/api/servers';
+        const method = serverId ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+            showToast(serverId ? `${typeName}更新成功` : `${typeName}添加成功`, 'success');
+            closeServerModal();
+            loadCabinets();
+        } else {
+            const error = await response.json();
+            if (response.status === 403) {
+                showToast('需要管理员权限', 'error');
+            } else {
+                showToast(error.message || '操作失败', 'error');
+            }
+        }
+    } catch (error) {
+        console.error('保存设备失败:', error);
+        showToast('保存失败', 'error');
+    }
+}
+
+// 格式化内存显示
+function formatMemory(memoryMB) {
+    if (!memoryMB || memoryMB === 0) return '0 MB';
+    if (memoryMB >= 1024 * 1024) {
+        return (memoryMB / (1024 * 1024)).toFixed(2) + ' TB';
+    } else if (memoryMB >= 1024) {
+        return (memoryMB / 1024).toFixed(2) + ' GB';
+    } else {
+        return memoryMB + ' MB';
+    }
+}
+
+// Toast提示
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    const colors = {
+        success: 'bg-success-500',
+        error: 'bg-danger-500',
+        warning: 'bg-warning-500',
+        info: 'bg-primary-500'
+    };
+    const icons = {
+        success: 'fa-check-circle',
+        error: 'fa-times-circle',
+        warning: 'fa-exclamation-triangle',
+        info: 'fa-info-circle'
+    };
+    
+    toast.className = `fixed top-4 right-4 ${colors[type]} text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2 animate-fade-in`;
+    toast.innerHTML = `<i class="fas ${icons[type]}"></i><span>${message}</span>`;
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-10px)';
+        toast.style.transition = 'all 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+</script>
+{% endblock %}

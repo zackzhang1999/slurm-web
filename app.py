@@ -473,10 +473,65 @@ def parse_node_details(node_name):
     output = run_command(f"scontrol show node {node_name}")
     details = {}
     if output and not output.startswith("Error"):
+        # Parse all key=value pairs
         for line in output.split('\n'):
             for match in re.finditer(r'(\w+)=([^\s]+)', line):
                 key, value = match.groups()
                 details[key.lower()] = value
+        
+        # Also try to extract CPU and memory info from the output directly
+        # scontrol show node format can vary, so we try multiple patterns
+        import re as re_module
+        
+        # Extract CPUAlloc (Slurm uses CPUAlloc, not AllocCPUs)
+        alloc_cpus_match = re_module.search(r'CPUAlloc=(\d+)', output, re_module.IGNORECASE)
+        if alloc_cpus_match:
+            details['alloccpus'] = alloc_cpus_match.group(1)
+        
+        # Extract CPUTot
+        cpu_tot_match = re_module.search(r'CPUTot=(\d+)', output, re_module.IGNORECASE)
+        if cpu_tot_match:
+            details['cputot'] = cpu_tot_match.group(1)
+        
+        # Extract AllocMem
+        alloc_mem_match = re_module.search(r'AllocMem=(\d+)', output, re_module.IGNORECASE)
+        if alloc_mem_match:
+            details['allocmem'] = alloc_mem_match.group(1)
+        
+        # Extract RealMemory
+        real_mem_match = re_module.search(r'RealMemory=(\d+)', output, re_module.IGNORECASE)
+        if real_mem_match:
+            details['realtotalmemory'] = real_mem_match.group(1)
+        
+        # Extract FreeMem to calculate used memory
+        free_mem_match = re_module.search(r'FreeMem=(\d+)', output, re_module.IGNORECASE)
+        if free_mem_match:
+            details['freemem'] = free_mem_match.group(1)
+            # Calculate used memory = RealMemory - FreeMem
+            if details.get('realtotalmemory'):
+                try:
+                    real_mem = int(details['realtotalmemory'])
+                    free_mem = int(free_mem_match.group(1))
+                    used_mem = real_mem - free_mem
+                    details['usedmem'] = str(used_mem)
+                except (ValueError, TypeError):
+                    pass
+        
+        # Extract State (handle states like MIXED, IDLE+DRAIN, etc.)
+        state_match = re_module.search(r'State=([\w\+]+)', output, re_module.IGNORECASE)
+        if state_match:
+            details['state'] = state_match.group(1)
+        
+        # Get running jobs count from squeue (scontrol doesn't show Jobs field)
+        jobs_count = 0
+        try:
+            squeue_output = run_command(f"squeue -w {node_name} -h -o '%i' 2>/dev/null")
+            if squeue_output and not squeue_output.startswith("Error"):
+                jobs_count = len([l for l in squeue_output.strip().split('\n') if l.strip()])
+        except:
+            pass
+        details['jobs'] = str(jobs_count)
+    
     return details
 
 def parse_sdiag():
@@ -1703,6 +1758,11 @@ def accounts_page():
 def topology_page():
     """Organization topology page"""
     return render_template('topology.html')
+
+@app.route('/cabinet-layout')
+def cabinet_layout_page():
+    """Cabinet layout management page"""
+    return render_template('cabinet_layout.html')
 
 @app.route('/api/summary')
 def api_summary():
@@ -3823,6 +3883,317 @@ def api_qos_associations(qos_name):
                 })
     
     return jsonify(associations)
+
+
+# ============== Cabinet Layout API ==============
+
+CABINET_DB_FILE = os.path.join(APP_ROOT, 'cabinets.json')
+
+def load_cabinets():
+    """Load cabinet and server data from JSON file"""
+    try:
+        with open(CABINET_DB_FILE, 'r') as f:
+            return json.load(f)
+    except:
+        return {'cabinets': [], 'servers': []}
+
+def save_cabinets(data):
+    """Save cabinet and server data to JSON file"""
+    with open(CABINET_DB_FILE, 'w') as f:
+        json.dump(data, f, indent=2)
+
+@app.route('/api/cabinets')
+def api_cabinets():
+    """Get all cabinets and servers"""
+    data = load_cabinets()
+    return jsonify(data)
+
+@app.route('/api/cabinets', methods=['POST'])
+def api_cabinet_create():
+    """Create a new cabinet - admin only"""
+    if not require_admin():
+        return jsonify({'success': False, 'message': '需要管理员权限'}), 403
+    
+    data = request.json or {}
+    name = data.get('name', '').strip()
+    height = int(data.get('height', 42))
+    location = data.get('location', '').strip()
+    
+    if not name:
+        return jsonify({'success': False, 'message': '机柜名称不能为空'}), 400
+    
+    cabinet_data = load_cabinets()
+    
+    # Check for duplicate name
+    if any(c['name'] == name for c in cabinet_data['cabinets']):
+        return jsonify({'success': False, 'message': '机柜名称已存在'}), 400
+    
+    cabinet = {
+        'id': str(uuid.uuid4()),
+        'name': name,
+        'height': height,
+        'location': location,
+        'created_at': datetime.datetime.now().isoformat()
+    }
+    
+    cabinet_data['cabinets'].append(cabinet)
+    save_cabinets(cabinet_data)
+    
+    return jsonify({'success': True, 'message': '机柜创建成功', 'cabinet': cabinet})
+
+@app.route('/api/cabinets/<cabinet_id>', methods=['PUT'])
+def api_cabinet_update(cabinet_id):
+    """Update a cabinet - admin only"""
+    if not require_admin():
+        return jsonify({'success': False, 'message': '需要管理员权限'}), 403
+    
+    data = request.json or {}
+    cabinet_data = load_cabinets()
+    
+    cabinet = next((c for c in cabinet_data['cabinets'] if c['id'] == cabinet_id), None)
+    if not cabinet:
+        return jsonify({'success': False, 'message': '机柜不存在'}), 404
+    
+    name = data.get('name', '').strip()
+    if name and name != cabinet['name']:
+        if any(c['name'] == name for c in cabinet_data['cabinets'] if c['id'] != cabinet_id):
+            return jsonify({'success': False, 'message': '机柜名称已存在'}), 400
+        cabinet['name'] = name
+    
+    if 'height' in data:
+        cabinet['height'] = int(data['height'])
+    if 'location' in data:
+        cabinet['location'] = data['location']
+    
+    cabinet['updated_at'] = datetime.datetime.now().isoformat()
+    save_cabinets(cabinet_data)
+    
+    return jsonify({'success': True, 'message': '机柜更新成功', 'cabinet': cabinet})
+
+@app.route('/api/cabinets/<cabinet_id>', methods=['DELETE'])
+def api_cabinet_delete(cabinet_id):
+    """Delete a cabinet and all its servers - admin only"""
+    if not require_admin():
+        return jsonify({'success': False, 'message': '需要管理员权限'}), 403
+    
+    cabinet_data = load_cabinets()
+    
+    cabinet = next((c for c in cabinet_data['cabinets'] if c['id'] == cabinet_id), None)
+    if not cabinet:
+        return jsonify({'success': False, 'message': '机柜不存在'}), 404
+    
+    # Remove all servers in this cabinet
+    cabinet_data['servers'] = [s for s in cabinet_data['servers'] if s['cabinet_id'] != cabinet_id]
+    
+    # Remove the cabinet
+    cabinet_data['cabinets'] = [c for c in cabinet_data['cabinets'] if c['id'] != cabinet_id]
+    
+    save_cabinets(cabinet_data)
+    
+    return jsonify({'success': True, 'message': '机柜删除成功'})
+
+@app.route('/api/servers', methods=['POST'])
+def api_server_create():
+    """Create a new server/device in a cabinet - admin only"""
+    if not require_admin():
+        return jsonify({'success': False, 'message': '需要管理员权限'}), 403
+    
+    data = request.json or {}
+    cabinet_id = data.get('cabinet_id')
+    name = data.get('name', '').strip()
+    unit = int(data.get('unit', 1))
+    start_u = int(data.get('start_u', 1))
+    comment = data.get('comment', '').strip()
+    device_type = data.get('device_type', 'server').strip().lower()
+    
+    if not cabinet_id or not name:
+        return jsonify({'success': False, 'message': '机柜ID和设备名称不能为空'}), 400
+    
+    # 验证设备类型
+    valid_types = ['server', 'switch', 'pdu', 'kvm', 'router', 'storage', 'firewall', 'other']
+    if device_type not in valid_types:
+        device_type = 'other'
+    
+    cabinet_data = load_cabinets()
+    
+    # Check cabinet exists
+    cabinet = next((c for c in cabinet_data['cabinets'] if c['id'] == cabinet_id), None)
+    if not cabinet:
+        return jsonify({'success': False, 'message': '机柜不存在'}), 404
+    
+    # Check for duplicate server name
+    if any(s['name'] == name for s in cabinet_data['servers']):
+        return jsonify({'success': False, 'message': '设备名称已存在'}), 400
+    
+    # Validate U position
+    end_u = start_u + unit - 1
+    if end_u > cabinet['height']:
+        return jsonify({'success': False, 'message': f'设备超出机柜高度范围 (最大 {cabinet["height"]}U)'}), 400
+    
+    # Check for conflicts
+    for s in cabinet_data['servers']:
+        if s['cabinet_id'] == cabinet_id:
+            s_end_u = s['start_u'] + s['unit'] - 1
+            if (start_u >= s['start_u'] and start_u <= s_end_u) or \
+               (end_u >= s['start_u'] and end_u <= s_end_u) or \
+               (start_u <= s['start_u'] and end_u >= s_end_u):
+                return jsonify({'success': False, 'message': f'U位 {start_u}-{end_u} 与设备 "{s["name"]}" 冲突'}), 400
+    
+    server = {
+        'id': str(uuid.uuid4()),
+        'cabinet_id': cabinet_id,
+        'name': name,
+        'unit': unit,
+        'start_u': start_u,
+        'comment': comment,
+        'device_type': device_type,
+        'created_at': datetime.datetime.now().isoformat()
+    }
+    
+    cabinet_data['servers'].append(server)
+    save_cabinets(cabinet_data)
+    
+    type_name = {'server': '服务器', 'switch': '交换机', 'pdu': 'PDU', 'kvm': 'KVM', 
+                 'router': '路由器', 'storage': '存储', 'firewall': '防火墙', 'other': '设备'}.get(device_type, '设备')
+    return jsonify({'success': True, 'message': f'{type_name}添加成功', 'server': server})
+
+@app.route('/api/servers/<server_id>', methods=['PUT'])
+def api_server_update(server_id):
+    """Update a server/device - admin only"""
+    if not require_admin():
+        return jsonify({'success': False, 'message': '需要管理员权限'}), 403
+    
+    data = request.json or {}
+    cabinet_data = load_cabinets()
+    
+    server = next((s for s in cabinet_data['servers'] if s['id'] == server_id), None)
+    if not server:
+        return jsonify({'success': False, 'message': '设备不存在'}), 404
+    
+    cabinet = next((c for c in cabinet_data['cabinets'] if c['id'] == server['cabinet_id']), None)
+    if not cabinet:
+        return jsonify({'success': False, 'message': '机柜不存在'}), 404
+    
+    # Update fields
+    if 'name' in data:
+        name = data['name'].strip()
+        if name and name != server['name']:
+            if any(s['name'] == name for s in cabinet_data['servers'] if s['id'] != server_id):
+                return jsonify({'success': False, 'message': '设备名称已存在'}), 400
+            server['name'] = name
+    
+    if 'unit' in data:
+        server['unit'] = int(data['unit'])
+    if 'start_u' in data:
+        server['start_u'] = int(data['start_u'])
+    if 'comment' in data:
+        server['comment'] = data['comment']
+    if 'device_type' in data:
+        device_type = data['device_type'].strip().lower()
+        valid_types = ['server', 'switch', 'pdu', 'kvm', 'router', 'storage', 'firewall', 'other']
+        if device_type in valid_types:
+            server['device_type'] = device_type
+    
+    # Validate new position
+    end_u = server['start_u'] + server['unit'] - 1
+    if end_u > cabinet['height']:
+        return jsonify({'success': False, 'message': f'设备超出机柜高度范围 (最大 {cabinet["height"]}U)'}), 400
+    
+    # Check for conflicts
+    for s in cabinet_data['servers']:
+        if s['cabinet_id'] == server['cabinet_id'] and s['id'] != server_id:
+            s_end_u = s['start_u'] + s['unit'] - 1
+            if (server['start_u'] >= s['start_u'] and server['start_u'] <= s_end_u) or \
+               (end_u >= s['start_u'] and end_u <= s_end_u) or \
+               (server['start_u'] <= s['start_u'] and end_u >= s_end_u):
+                return jsonify({'success': False, 'message': f'U位 {server["start_u"]}-{end_u} 与设备 "{s["name"]}" 冲突'}), 400
+    
+    server['updated_at'] = datetime.datetime.now().isoformat()
+    save_cabinets(cabinet_data)
+    
+    device_type = server.get('device_type', 'server')
+    type_name = {'server': '服务器', 'switch': '交换机', 'pdu': 'PDU', 'kvm': 'KVM', 
+                 'router': '路由器', 'storage': '存储', 'firewall': '防火墙', 'other': '设备'}.get(device_type, '设备')
+    return jsonify({'success': True, 'message': f'{type_name}更新成功', 'server': server})
+
+@app.route('/api/servers/<server_id>', methods=['DELETE'])
+def api_server_delete(server_id):
+    """Delete a server/device - admin only"""
+    if not require_admin():
+        return jsonify({'success': False, 'message': '需要管理员权限'}), 403
+    
+    cabinet_data = load_cabinets()
+    
+    server = next((s for s in cabinet_data['servers'] if s['id'] == server_id), None)
+    if not server:
+        return jsonify({'success': False, 'message': '设备不存在'}), 404
+    
+    device_type = server.get('device_type', 'server')
+    type_name = {'server': '服务器', 'switch': '交换机', 'pdu': 'PDU', 'kvm': 'KVM', 
+                 'router': '路由器', 'storage': '存储', 'firewall': '防火墙', 'other': '设备'}.get(device_type, '设备')
+    
+    cabinet_data['servers'] = [s for s in cabinet_data['servers'] if s['id'] != server_id]
+    save_cabinets(cabinet_data)
+    
+    return jsonify({'success': True, 'message': f'{type_name}删除成功'})
+
+@app.route('/api/nodes/status')
+def api_nodes_status():
+    """Get real-time status for all nodes"""
+    node_info = parse_sinfo()
+    statuses = {}
+    
+    for node in node_info:
+        name = node['name']
+        state = node['state'].lower()
+        
+        # Get detailed node info for CPU/memory usage
+        details = parse_node_details(name)
+        
+        # Calculate CPU load - scontrol uses lowercase field names
+        cpu_load = 0
+        # Try different possible field names
+        alloc_cpus = details.get('alloccpus') or details.get('alloc_cpus', 0)
+        total_cpus = details.get('cputot') or details.get('cpus') or details.get('total_cpus', 1)
+        try:
+            alloc_cpus = int(alloc_cpus)
+            total_cpus = int(total_cpus)
+            if total_cpus > 0:
+                cpu_load = (alloc_cpus / total_cpus) * 100
+        except (ValueError, TypeError):
+            alloc_cpus = 0
+            total_cpus = int(total_cpus) if total_cpus else 1
+        
+        # Get memory usage - scontrol uses lowercase field names
+        alloc_mem = details.get('allocmem') or details.get('alloc_mem', 0)
+        real_memory = details.get('realtotalmemory') or details.get('real_memory') or details.get('memory', 0)
+        try:
+            alloc_mem = int(alloc_mem)
+            real_memory = int(real_memory)
+        except (ValueError, TypeError):
+            alloc_mem = 0
+            real_memory = 0
+        
+        # Get running jobs count from squeue
+        jobs_count = 0
+        try:
+            squeue_output = run_command(f"squeue -w {name} -h -o '%i' 2>/dev/null")
+            if squeue_output and not squeue_output.startswith("Error"):
+                jobs_count = len([l for l in squeue_output.strip().split('\n') if l.strip()])
+        except:
+            pass
+        
+        statuses[name] = {
+            'state': state,
+            'cpu_load': round(cpu_load, 1),
+            'memory_used': alloc_mem,
+            'memory_total': real_memory,
+            'jobs': jobs_count,
+            'alloc_cpus': alloc_cpus,
+            'total_cpus': total_cpus
+        }
+    
+    return jsonify({'statuses': statuses})
 
 
 # ============== Slurm Reservation API ==============
