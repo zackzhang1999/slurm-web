@@ -92,7 +92,7 @@
     </div>
 
     <!-- 图表区域 -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
         <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
             <h3 class="text-lg font-semibold text-slate-800 mb-4"><i class="fas fa-chart-pie text-primary-500 mr-2"></i>节点状态分布</h3>
             <div class="h-56 relative"><canvas id="nodes-chart"></canvas></div>
@@ -104,6 +104,10 @@
         <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
             <h3 class="text-lg font-semibold text-slate-800 mb-4"><i class="fas fa-chart-pie text-primary-500 mr-2"></i>CPU 资源使用</h3>
             <div class="h-56 relative"><canvas id="cpu-chart"></canvas></div>
+        </div>
+        <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+            <h3 class="text-lg font-semibold text-slate-800 mb-4"><i class="fas fa-microchip text-accent-500 mr-2"></i>GPU 资源使用</h3>
+            <div class="h-56 relative"><canvas id="gpu-chart"></canvas></div>
         </div>
     </div>
 
@@ -935,6 +939,10 @@ function updateCharts(summary) {
         cpuChart.data.datasets[0].data = [summary.cpus.alloc, summary.cpus.idle];
         cpuChart.update();
     }
+    if (gpuChart) {
+        gpuChart.data.datasets[0].data = [summary.gpus.alloc, summary.gpus.total - summary.gpus.alloc];
+        gpuChart.update();
+    }
 }
 
 function initCharts() {
@@ -952,6 +960,11 @@ function initCharts() {
     cpuChart = new Chart(document.getElementById('cpu-chart'), {
         type: 'doughnut',
         data: { labels: ['已分配', '空闲'], datasets: [{ data: [0,0], backgroundColor: [colors.warning, colors.success], borderWidth: 0 }] },
+        options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom', labels: { padding: 15, font: { size: 11 } } } } }
+    });
+    gpuChart = new Chart(document.getElementById('gpu-chart'), {
+        type: 'doughnut',
+        data: { labels: ['已分配', '空闲'], datasets: [{ data: [0,0], backgroundColor: [colors.purple, colors.success], borderWidth: 0 }] },
         options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { position: 'bottom', labels: { padding: 15, font: { size: 11 } } } } }
     });
 }
