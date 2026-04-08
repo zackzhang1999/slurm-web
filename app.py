@@ -2926,13 +2926,16 @@ def parse_partition_usage(hours=24):
             parts = line.split('|')
             if len(parts) >= 4:
                 partition, state, elapsed, cpu_time = parts[:4]
+                state_upper = state.upper()
+                # 剔除正在运行和排队的任务
+                if state_upper in ['RUNNING', 'R', 'PENDING', 'PD', 'SUSPENDED', 'S']:
+                    continue
                 if partition not in partitions:
                     partitions[partition] = {'jobs': 0, 'completed': 0, 'failed': 0, 'cpu_hours': 0}
                 partitions[partition]['jobs'] += 1
-                state_upper = state.upper()
                 if state_upper in ['COMPLETED', 'CD']:
                     partitions[partition]['completed'] += 1
-                elif state_upper in ['FAILED', 'F', 'TIMEOUT', 'TO', 'CANCELLED', 'CA']:
+                elif state_upper in ['FAILED', 'F', 'TIMEOUT', 'TO', 'CANCELLED', 'CA', 'BOOT_FAIL', 'BF', 'NODE_FAIL', 'NF', 'PREEMPTED', 'PR', 'SPECIAL_EXIT', 'SE']:
                     partitions[partition]['failed'] += 1
                 # Parse CPU time
                 try:
