@@ -17,10 +17,31 @@ import uuid
 import socket
 import paramiko
 import shutil
+import select
+import fcntl
+import struct
+import getpass
+
+# Unix-specific modules for PTY
+import pty
+import termios
+try:
+    import tty
+except ImportError:
+    tty = None
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from flask import Flask, render_template, jsonify, request, Response, session, redirect, url_for, send_file as flask_send_file
+from flask import Flask, render_template, jsonify, request, Response, session, redirect, url_for, send_file as flask_send_file, stream_with_context
 from flask_socketio import SocketIO, emit
+import urllib.parse
+import urllib.request
+import ssl
+
+try:
+    import requests
+    HAS_REQUESTS = True
+except ImportError:
+    HAS_REQUESTS = False
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'slurm-monitor-secret-key-change-in-production'
@@ -1643,6 +1664,19 @@ def terminal_page():
     return render_template('terminal.html', node=node)
 
 
+@app.route('/job-terminal')
+def job_terminal_page():
+    """Terminal page for accessing running job via srun"""
+    if 'user_type' not in session:
+        return redirect('/login')
+    
+    job_id = request.args.get('job_id', '')
+    if not job_id:
+        return '缺少作业ID参数', 400
+    
+    return render_template('job_terminal.html', job_id=job_id)
+
+
 @app.route('/api/terminal/exec', methods=['POST'])
 def api_terminal_exec():
     """Execute command on remote node via SSH"""
@@ -1764,6 +1798,268 @@ def cabinet_layout_page():
     """Cabinet layout management page"""
     return render_template('cabinet_layout.html')
 
+@app.route('/webview')
+def webview_page():
+    """Webview page for embedding local web pages"""
+    config = load_config()
+    default_url = config.get('webview_default_url', '')
+    return render_template('webview.html', default_url=default_url)
+
+@app.route('/api/webview/default-url', methods=['GET'])
+def api_get_webview_default_url():
+    """Get the default webview URL"""
+    config = load_config()
+    return jsonify({
+        'success': True,
+        'url': config.get('webview_default_url', '')
+    })
+
+@app.route('/api/webview/default-url', methods=['POST'])
+def api_set_webview_default_url():
+    """Set the default webview URL (admin only)"""
+    # 检查登录状态
+    if 'user_type' not in session:
+        return jsonify({'success': False, 'message': '请先登录'}), 401
+    
+    # 检查是否为管理员
+    if session.get('user_type') != 'admin':
+        return jsonify({'success': False, 'message': '只有管理员可以设置默认网址'}), 403
+    
+    try:
+        data = request.get_json()
+        url = data.get('url', '').strip()
+        
+        # 验证URL格式
+        if url and not (url.startswith('http://') or url.startswith('https://')):
+            url = 'http://' + url
+        
+        # 保存到配置
+        config = load_config()
+        config['webview_default_url'] = url
+        save_config(config)
+        
+        return jsonify({
+            'success': True,
+            'message': '默认网址保存成功',
+            'url': url
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'保存失败: {str(e)}'
+        }), 500
+
+
+# ============== Webview 代理功能 ==============
+
+@app.route('/api/webview/proxy')
+def api_webview_proxy():
+    """Proxy webview requests to bypass X-Frame-Options restrictions"""
+    # Check login status
+    if 'user_type' not in session:
+        return jsonify({'success': False, 'message': '请先登录'}), 401
+    
+    target_url = request.args.get('url', '').strip()
+    if not target_url:
+        return jsonify({'success': False, 'message': 'Missing URL parameter'}), 400
+    
+    # Decode URL (might be encoded multiple times)
+    try:
+        decoded_url = target_url
+        for _ in range(3):
+            try:
+                new_decoded = urllib.parse.unquote(decoded_url)
+                if new_decoded == decoded_url:
+                    break
+                decoded_url = new_decoded
+            except:
+                break
+        target_url = decoded_url
+    except:
+        pass
+    
+    # Validate URL format
+    if not (target_url.startswith('http://') or target_url.startswith('https://')):
+        return jsonify({'success': False, 'message': 'Invalid URL format'}), 400
+    
+    try:
+        # Set headers to mimic a browser
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        }
+        
+        # Forward some original headers
+        for header in ['Cookie', 'Authorization']:
+            if header in request.headers:
+                headers[header] = request.headers[header]
+        
+        # Create SSL context (allow unverified certs for internal networks)
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
+        req = urllib.request.Request(target_url, headers=headers, method=request.method)
+        
+        # Handle POST data
+        if request.method == 'POST':
+            post_data = request.get_data()
+            req = urllib.request.Request(target_url, data=post_data, headers=headers, method='POST')
+        
+        # Send request
+        response = urllib.request.urlopen(req, context=ssl_context, timeout=30)
+        
+        # Get content type
+        content_type = response.headers.get('Content-Type', 'text/html')
+        
+        # Read content
+        content = response.read()
+        
+        # For HTML content, we need to rewrite links
+        if 'text/html' in content_type.lower():
+            try:
+                html_content = content.decode('utf-8', errors='ignore')
+                from urllib.parse import urljoin, urlparse
+                parsed_target = urlparse(target_url)
+                base_url = f"{parsed_target.scheme}://{parsed_target.netloc}"
+                proxy_base = '/api/webview/proxy?url='
+                
+                def rewrite_url(url):
+                    """Rewrite a single URL to go through proxy"""
+                    if not url or url.startswith('data:') or url.startswith('#') or url.startswith('javascript:'):
+                        return url
+                    if url.startswith('http://') or url.startswith('https://'):
+                        # External URL - also proxy it
+                        pass
+                    elif url.startswith('//'):
+                        url = f"{parsed_target.scheme}:{url}"
+                    elif url.startswith('/'):
+                        url = f"{base_url}{url}"
+                    else:
+                        url = urljoin(target_url, url)
+                    
+                    # Don't double-proxy
+                    if url.startswith(proxy_base):
+                        return url
+                    
+                    return proxy_base + urllib.parse.quote(url, safe='')
+                
+                # Pattern 1: href="..." or src="..."
+                def replace_attr(match):
+                    attr = match.group(1)
+                    quote = match.group(2)
+                    url = match.group(3)
+                    new_url = rewrite_url(url)
+                    return f'{attr}={quote}{new_url}{quote}'
+                
+                html_content = re.sub(r'(href|src|action)=("|\")([^"\']*)\2', replace_attr, html_content, flags=re.IGNORECASE)
+                
+                # Pattern 2: url(...) in CSS/style
+                def replace_css_url(match):
+                    url = match.group(1).strip()
+                    quote = '"' if '"' in match.group(0) else "'" if "'" in match.group(0) else ''
+                    new_url = rewrite_url(url)
+                    return f'url({quote}{new_url}{quote})'
+                
+                html_content = re.sub(r'url\(\s*["\']?([^\)"\']+)["\']?\s*\)', replace_css_url, html_content, flags=re.IGNORECASE)
+                
+                # Pattern 3: Replace <base> tag if exists, or add one
+                base_tag_pattern = r'<base[^>]*href=["\']([^"\']*)["\'][^>]*>'
+                existing_base = re.search(base_tag_pattern, html_content, re.IGNORECASE)
+                base_url_quoted = urllib.parse.quote(base_url + '/', safe='')
+                if existing_base:
+                    # Replace existing base tag's href
+                    html_content = re.sub(base_tag_pattern, f'<base href="{proxy_base}{base_url_quoted}">', html_content, flags=re.IGNORECASE)
+                else:
+                    # Add base tag after <head>
+                    base_tag = f'<base href="{proxy_base}{base_url_quoted}">'
+                    html_content = re.sub(r'(<head[^>]*>)', r'\1\n    ' + base_tag, html_content, flags=re.IGNORECASE)
+                
+                # Pattern 4: Inject JavaScript to intercept fetch/XHR for dynamic resource loading
+                proxy_script = f'''<script>
+(function() {{
+    const PROXY_BASE = '{proxy_base}';
+    const TARGET_BASE = '{base_url}';
+    
+    function proxyUrl(url) {{
+        if (!url || typeof url !== 'string') return url;
+        if (url.startsWith('data:') || url.startsWith('#') || url.startsWith('javascript:')) return url;
+        if (url.startsWith(PROXY_BASE)) return url;
+        
+        let fullUrl = url;
+        if (url.startsWith('http://') || url.startsWith('https://')) {{
+            // Already absolute
+        }} else if (url.startsWith('//')) {{
+            fullUrl = window.location.protocol + url;
+        }} else if (url.startsWith('/')) {{
+            fullUrl = TARGET_BASE + url;
+        }} else {{
+            fullUrl = TARGET_BASE + '/' + url;
+        }}
+        
+        return PROXY_BASE + encodeURIComponent(fullUrl);
+    }}
+    
+    // Intercept fetch
+    const originalFetch = window.fetch;
+    window.fetch = function(url, options) {{
+        if (typeof url === 'string') {{
+            url = proxyUrl(url);
+        }} else if (url && url.url) {{
+            url = new Request(proxyUrl(url.url), url);
+        }}
+        return originalFetch.call(this, url, options);
+    }};
+    
+    // Intercept XMLHttpRequest
+    const originalOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(method, url, async, user, password) {{
+        url = proxyUrl(url);
+        return originalOpen.call(this, method, url, async, user, password);
+    }};
+    
+    // Intercept WebSocket (if needed)
+    const originalWebSocket = window.WebSocket;
+    window.WebSocket = function(url, protocols) {{
+        // WebSocket cannot be proxied via HTTP, but we can try to rewrite the URL
+        // This may not work for all cases
+        return new originalWebSocket(url, protocols);
+    }};
+}})();
+</script>'''
+                
+                # Insert script before </head> or after <head>
+                if '</head>' in html_content:
+                    html_content = html_content.replace('</head>', proxy_script + '\n</head>')
+                elif '<head>' in html_content:
+                    html_content = html_content.replace('<head>', '<head>\n' + proxy_script)
+                else:
+                    # No head tag, add at the beginning
+                    html_content = proxy_script + '\n' + html_content
+                
+                content = html_content.encode('utf-8')
+            except Exception as e:
+                print(f"[Proxy] Rewrite error: {e}")
+        
+        # Create response without X-Frame-Options
+        flask_response = Response(content, status=response.status)
+        
+        # Copy relevant headers
+        for key, value in response.headers.items():
+            if key.lower() not in ['x-frame-options', 'content-security-policy', 'content-encoding', 'transfer-encoding', 'content-length']:
+                flask_response.headers[key] = value
+        
+        flask_response.headers['Content-Type'] = content_type
+        
+        return flask_response
+        
+    except urllib.error.HTTPError as e:
+        return jsonify({'success': False, 'message': f'HTTP Error {e.code}: {e.reason}'}), e.code
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Proxy error: {str(e)}'}), 500
+
+
 @app.route('/api/summary')
 def api_summary():
     return jsonify(get_cluster_summary())
@@ -1836,6 +2132,85 @@ def api_batch_job_action():
 @app.route('/api/jobs')
 def api_jobs():
     return jsonify(parse_squeue())
+
+def get_job_details(job_id):
+    """Get job details using scontrol (synchronous function for internal use)"""
+    details = {}
+    
+    # Try scontrol for running/pending jobs
+    output = run_command(f"scontrol show job {job_id}")
+    if output and not output.startswith("Error"):
+        for line in output.split('\n'):
+            for match in re.finditer(r'(\w+)=([^\s]+)', line):
+                key, value = match.groups()
+                details[key.lower()] = value
+        
+        # Normalize state field
+        if 'jobstate' in details:
+            details['state'] = details['jobstate']
+        
+        # Also extract user from UserId field (format: user(uid))
+        if 'userid' in details:
+            user_match = re.match(r'(\w+)\(', details['userid'])
+            if user_match:
+                details['user'] = user_match.group(1)
+            else:
+                details['user'] = details['userid']
+    
+    return details if details else None
+
+
+@app.route('/api/job/<job_id>/check-attach')
+def api_job_check_attach(job_id):
+    """Check if we can attach to a running job using srun --overlap"""
+    if 'user_type' not in session:
+        return jsonify({'success': False, 'message': '未登录'}), 401
+    
+    # Get job details
+    job_info = get_job_details(job_id)
+    if not job_info:
+        return jsonify({'success': False, 'message': '作业不存在'}), 404
+    
+    # Check permissions
+    current_user = session.get('username')
+    is_admin = session.get('user_type') == 'admin'
+    job_user = job_info.get('user') or job_info.get('userid', '').split('(')[0]
+    
+    if not is_admin and job_user != current_user:
+        return jsonify({'success': False, 'message': '无权访问该作业'}), 403
+    
+    # Check job state
+    state = job_info.get('state') or job_info.get('jobstate', 'UNKNOWN')
+    if state not in ['RUNNING', 'R', 'CG']:
+        return jsonify({
+            'success': False, 
+            'message': f'作业未在运行中 (当前状态: {state})',
+            'can_attach': False
+        })
+    
+    # Check if srun --overlap is available
+    srun_check = run_command('srun --help 2>&1 | grep -q overlap && echo "supported" || echo "not supported"')
+    overlap_supported = 'supported' in (srun_check or '')
+    
+    # Test if we can attach
+    test_result = run_command(f'srun --jobid={job_id} --overlap --pty echo "test" 2>&1', timeout=5)
+    can_attach = test_result and 'error' not in test_result.lower() and 'unable' not in test_result.lower()
+    
+    # Get system user
+    system_user = getpass.getuser()
+    
+    return jsonify({
+        'success': True,
+        'job_id': job_id,
+        'job_user': job_user,
+        'system_user': system_user,
+        'state': state,
+        'overlap_supported': overlap_supported,
+        'can_attach': can_attach,
+        'test_output': test_result if not can_attach else None,
+        'recommendations': []
+    })
+
 
 @app.route('/api/job/<job_id>')
 def api_job_detail(job_id):
@@ -2748,6 +3123,237 @@ def handle_terminal_disconnect():
         terminal_sessions[sid].close()
         del terminal_sessions[sid]
         emit('terminal_disconnected', namespace='/')
+
+
+# ============== 作业终端会话管理 ==============
+
+job_terminal_sessions = {}
+
+class JobTerminalSession:
+    """作业终端会话 - 使用 srun 进入运行中的作业"""
+    
+    def __init__(self, job_id):
+        self.job_id = job_id
+        self.process = None
+        self.connected = False
+        self.master_fd = None
+        self.job_user = None
+    
+    def start(self, width=80, height=24):
+        """启动 srun 进程进入作业"""
+        try:
+            # 获取作业信息
+            job_info = get_job_details(self.job_id)
+            if not job_info:
+                return False, '无法获取作业信息'
+            
+            # 获取作业所有者
+            self.job_user = job_info.get('user') or job_info.get('userid', '').split('(')[0]
+            if not self.job_user:
+                return False, '无法获取作业所有者'
+            
+            # 获取当前系统用户
+            current_user = getpass.getuser()
+            
+            print(f"[JobTerminalSession] job_id={self.job_id}, job_user={self.job_user}, current_user={current_user}")
+            
+            # 使用 pty 创建伪终端
+            master_fd, slave_fd = pty.openpty()
+            
+            # 设置终端大小
+            size = struct.pack('HHHH', height, width, 0, 0)
+            try:
+                fcntl.ioctl(master_fd, termios.TIOCSWINSZ, size)
+            except Exception as e:
+                print(f"[JobTerminalSession] Failed to set terminal size: {e}")
+            
+            # 构建命令
+            srun_cmd = f'srun --jobid={self.job_id} --overlap --pty /bin/bash -l'
+            
+            if current_user == self.job_user:
+                cmd = srun_cmd
+                print(f"[JobTerminalSession] Running as same user: {cmd}")
+            else:
+                cmd = f"su - {self.job_user} -c '{srun_cmd}'"
+                print(f"[JobTerminalSession] Running with su: {cmd}")
+            
+            # 启动进程
+            self.process = subprocess.Popen(
+                cmd,
+                stdin=slave_fd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                shell=True,
+                preexec_fn=os.setsid,
+                env={**os.environ, 'TERM': 'xterm-256color'}
+            )
+            
+            os.close(slave_fd)
+            self.master_fd = master_fd
+            self.connected = True
+            
+            return True, None
+            
+        except Exception as e:
+            return False, str(e)
+    
+    def read(self):
+        """读取终端输出"""
+        try:
+            if not self.master_fd:
+                return None
+            ready, _, _ = select.select([self.master_fd], [], [], 0.05)
+            if ready:
+                data = os.read(self.master_fd, 1024)
+                return data.decode('utf-8', errors='ignore')
+        except Exception as e:
+            print(f"[JobTerminalSession] Read error: {e}")
+        return None
+    
+    def write(self, data):
+        """写入终端输入"""
+        try:
+            if self.master_fd:
+                os.write(self.master_fd, data.encode('utf-8'))
+        except Exception as e:
+            print(f"Job terminal write error: {e}")
+    
+    def resize(self, width, height):
+        """调整终端大小"""
+        try:
+            import struct
+            import termios
+            import fcntl
+            size = struct.pack('HHHH', height, width, 0, 0)
+            fcntl.ioctl(self.master_fd, termios.TIOCSWINSZ, size)
+        except Exception as e:
+            print(f"Job terminal resize error: {e}")
+    
+    def close(self):
+        """关闭会话"""
+        try:
+            self.connected = False
+            if self.process:
+                try:
+                    self.process.terminate()
+                    self.process.wait(timeout=2)
+                except:
+                    try:
+                        self.process.kill()
+                    except:
+                        pass
+                self.process = None
+            if hasattr(self, 'master_fd') and self.master_fd:
+                try:
+                    os.close(self.master_fd)
+                except:
+                    pass
+                self.master_fd = None
+        except Exception as e:
+            print(f"Job terminal close error: {e}")
+
+
+@socketio.on('job_terminal_connect')
+def handle_job_terminal_connect(data):
+    """处理作业终端连接请求"""
+    if 'user_type' not in session:
+        emit('job_terminal_error', {'message': '未登录'}, namespace='/')
+        return
+    
+    job_id = data.get('job_id', '')
+    if not job_id:
+        emit('job_terminal_error', {'message': '未指定作业ID'}, namespace='/')
+        return
+    
+    # 获取作业信息
+    job_info = get_job_details(job_id)
+    if not job_info:
+        emit('job_terminal_error', {'message': f'作业 {job_id} 不存在'}, namespace='/')
+        return
+    
+    # 检查用户权限（只能连接自己的作业，管理员可以连接所有作业）
+    current_user = session.get('username', '')
+    is_admin = session.get('user_type') == 'admin'
+    job_user = job_info.get('user', '')
+    
+    print(f"[JobTerminal] User: {current_user}, JobUser: {job_user}, IsAdmin: {is_admin}")
+    
+    # 如果无法获取作业用户，允许管理员连接
+    if not is_admin and job_user and job_user != current_user:
+        emit('job_terminal_error', {'message': f'无权访问该作业 (作业用户: {job_user}, 当前用户: {current_user})'}, namespace='/')
+        return
+    
+    # 检查作业状态
+    job_state = job_info.get('state', 'UNKNOWN')
+    print(f"[JobTerminal] Job {job_id} state: {job_state}")
+    
+    if job_state not in ['RUNNING', 'R', 'CG', 'COMPLETING']:
+        emit('job_terminal_error', {'message': f'作业未在运行中 (当前状态: {job_state})'}, namespace='/')
+        return
+    
+    sid = request.sid
+    
+    # 创建新会话
+    session_obj = JobTerminalSession(job_id)
+    success, error_msg = session_obj.start(width=data.get('width', 80), height=data.get('height', 24))
+    
+    if success:
+        job_terminal_sessions[sid] = session_obj
+        emit('job_terminal_connected', {'job_id': job_id}, namespace='/')
+        print(f"[JobTerminal] Job {job_id} terminal connected successfully")
+        
+        # 启动后台任务读取输出
+        def read_job_output(sid, session_obj, socketio):
+            while sid in job_terminal_sessions and session_obj.connected:
+                try:
+                    data = session_obj.read()
+                    if data:
+                        socketio.emit('job_terminal_data', {'data': data}, namespace='/', to=sid)
+                except Exception as e:
+                    print(f"Read job output error: {e}")
+                    break
+                time.sleep(0.05)
+            
+            # 连接断开
+            if sid in job_terminal_sessions:
+                job_terminal_sessions[sid].close()
+                del job_terminal_sessions[sid]
+                socketio.emit('job_terminal_disconnected', namespace='/', to=sid)
+        
+        socketio.start_background_task(read_job_output, sid, session_obj, socketio)
+    else:
+        emit('job_terminal_error', {'message': f'无法连接到作业: {error_msg}'}, namespace='/')
+        print(f"[JobTerminal] Failed to start terminal for job {job_id}: {error_msg}")
+
+
+@socketio.on('job_terminal_input')
+def handle_job_terminal_input(data):
+    """处理作业终端输入"""
+    sid = request.sid
+    if sid in job_terminal_sessions:
+        job_terminal_sessions[sid].write(data.get('data', ''))
+
+
+@socketio.on('job_terminal_resize')
+def handle_job_terminal_resize(data):
+    """处理作业终端大小调整"""
+    sid = request.sid
+    if sid in job_terminal_sessions:
+        job_terminal_sessions[sid].resize(
+            data.get('width', 80),
+            data.get('height', 24)
+        )
+
+
+@socketio.on('job_terminal_disconnect')
+def handle_job_terminal_disconnect(data):
+    """处理作业终端断开"""
+    sid = request.sid
+    if sid in job_terminal_sessions:
+        job_terminal_sessions[sid].close()
+        del job_terminal_sessions[sid]
+        emit('job_terminal_disconnected', namespace='/')
+
 
 # ============== Main ==============
 

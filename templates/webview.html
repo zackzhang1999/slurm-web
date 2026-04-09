@@ -1,0 +1,496 @@
+{% extends "base.html" %}
+
+{% block title %}文档教程 - Amax 集群监控系统{% endblock %}
+{% block page_title %}文档教程{% endblock %}
+{% block page_subtitle %}内嵌浏览服务器本地页面{% endblock %}
+
+{% block content %}
+<!-- 网页预览专用布局 - 占满整个视口减去头部和边距 -->
+<style>
+.webview-container {
+    height: calc(100vh - 180px);
+    min-height: 500px;
+}
+.webview-iframe {
+    height: 100%;
+    width: 100%;
+    border: none;
+}
+</style>
+<div class="webview-container flex flex-col">
+    <!-- 工具栏 - 仅管理员可见 -->
+    <div id="admin-toolbar" class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-4 flex-shrink-0" style="display: none;">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3 flex-1">
+                <div class="flex items-center gap-2 flex-1 max-w-3xl">
+                    <i class="fas fa-link text-slate-400"></i>
+                    <input type="text" id="webview-url" 
+                        class="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all text-sm"
+                        placeholder="输入网址，例如：http://localhost:8080 或 http://192.168.1.100:3000"
+                        value="{{ default_url }}">
+                    
+                    <!-- 代理模式开关 -->
+                    <label class="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors" title="代理模式可以绕过X-Frame-Options限制">
+                        <input type="checkbox" id="proxy-mode" class="w-4 h-4 text-primary-500 rounded border-slate-300 focus:ring-primary-500">
+                        <span class="text-sm text-slate-600">代理模式</span>
+                        <i class="fas fa-shield-alt text-slate-400 text-xs"></i>
+                    </label>
+                    
+                    <button onclick="loadWebview()" class="btn-primary flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors">
+                        <i class="fas fa-play"></i>
+                        <span>加载</span>
+                    </button>
+                    <button onclick="refreshWebview()" class="btn-secondary flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors">
+                        <i class="fas fa-sync-alt"></i>
+                        <span>刷新</span>
+                    </button>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="saveDefaultUrl()" class="btn-secondary flex items-center gap-2 px-4 py-2 bg-accent-100 text-accent-700 rounded-lg hover:bg-accent-200 transition-colors">
+                    <i class="fas fa-save"></i>
+                    <span>设为默认</span>
+                </button>
+            </div>
+        </div>
+        <div class="mt-3 text-xs text-slate-500 flex items-center gap-4 flex-wrap">
+            <span><i class="fas fa-info-circle mr-1"></i>提示：可输入服务器本地服务的地址，如 Grafana、Prometheus、其他监控面板等</span>
+            <span id="proxy-hint" class="hidden text-primary-600"><i class="fas fa-shield-alt mr-1"></i>代理模式：通过后端代理加载，可解决"拒绝连接"问题</span>
+            <span id="default-url-hint" class="hidden"><i class="fas fa-check-circle text-accent-500 mr-1"></i>当前为管理员设置的默认地址</span>
+        </div>
+    </div>
+    
+    <!-- 普通用户不显示任何工具栏 -->
+
+    <!-- 浏览器容器 -->
+    <div class="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative" style="min-height: 0;">
+        <iframe id="webview-frame" 
+            class="webview-iframe"
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
+            allow="fullscreen; clipboard-read; clipboard-write">
+        </iframe>
+        
+        <!-- 空状态提示 -->
+        <div id="webview-empty" class="absolute inset-0 flex flex-col items-center justify-center text-center p-12 bg-slate-50">
+            <div class="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                <i class="fas fa-globe text-slate-400 text-4xl"></i>
+            </div>
+            <h3 class="text-lg font-semibold text-slate-700 mb-2">网页预览</h3>
+            <p class="text-slate-500 mb-6 max-w-md">在上方输入网址，即可在此嵌入显示服务器本地的Web页面<br>支持 Grafana、Prometheus、其他监控面板等</p>
+            
+            <!-- 常见问题提示 -->
+            <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6 max-w-lg text-left">
+                <p class="text-amber-800 text-sm font-medium mb-2"><i class="fas fa-lightbulb mr-1"></i>遇到"拒绝连接"错误？</p>
+                <p class="text-amber-700 text-xs leading-relaxed">
+                    如果直接加载失败，请勾选<strong>"代理模式"</strong>。代理模式通过后端转发请求，可以绕过 Grafana 等服务的 X-Frame-Options 安全限制。
+                </p>
+            </div>
+            
+            <div class="flex gap-3">
+                <button onclick="setExampleUrl('http://localhost:3000')" class="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors text-sm">
+                    <i class="fas fa-chart-line mr-1"></i>Grafana (localhost:3000)
+                </button>
+                <button onclick="setExampleUrl('http://localhost:9090')" class="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors text-sm">
+                    <i class="fas fa-database mr-1"></i>Prometheus (localhost:9090)
+                </button>
+            </div>
+        </div>
+
+        <!-- 加载指示器 -->
+        <div id="webview-loading" class="absolute inset-0 flex items-center justify-center bg-white/80 hidden">
+            <div class="flex flex-col items-center">
+                <div class="w-12 h-12 border-4 border-primary-200 border-t-primary-500 rounded-full animate-spin mb-3"></div>
+                <span class="text-slate-600">加载中...</span>
+            </div>
+        </div>
+
+        <!-- 错误提示 -->
+        <div id="webview-error" class="absolute inset-0 flex items-center justify-center bg-slate-50 hidden">
+            <div class="text-center p-8 max-w-lg">
+                <div class="w-20 h-20 bg-danger-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-exclamation-triangle text-danger-500 text-3xl"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-slate-700 mb-2">无法加载页面</h3>
+                <p class="text-slate-500 mb-4" id="error-message">请检查网址是否正确，或目标服务是否可访问</p>
+                
+                <!-- 代理模式建议 -->
+                <div id="proxy-suggestion" class="bg-primary-50 border border-primary-200 rounded-lg p-4 mb-4 hidden">
+                    <p class="text-primary-800 text-sm"><i class="fas fa-magic mr-1"></i>提示：这可能是 X-Frame-Options 限制导致的</p>
+                    <p class="text-primary-700 text-xs mt-1">点击下方按钮使用代理模式重新加载</p>
+                </div>
+                
+                <div class="flex gap-3 justify-center">
+                    <button onclick="hideError()" class="px-6 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors">
+                        返回
+                    </button>
+                    <button id="retry-proxy-btn" onclick="retryWithProxy()" class="hidden px-6 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors">
+                        <i class="fas fa-shield-alt mr-1"></i>使用代理模式重试
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentUser = null;
+let defaultUrl = '{{ default_url }}';
+let useProxy = false;
+let lastFailedUrl = '';
+
+// 页面加载时初始化
+document.addEventListener('DOMContentLoaded', async function() {
+    await loadCurrentUser();
+    updateUIForUserRole();
+    
+    // 如果有默认URL，自动加载
+    if (defaultUrl) {
+        const urlInput = document.getElementById('webview-url');
+        if (urlInput) {
+            urlInput.value = defaultUrl;
+        }
+        loadWebview();
+        const hint = document.getElementById('default-url-hint');
+        if (hint) {
+            hint.classList.remove('hidden');
+        }
+    }
+
+    // 回车键加载（仅管理员）
+    const urlInput = document.getElementById('webview-url');
+    if (urlInput) {
+        urlInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                loadWebview();
+            }
+        });
+    }
+
+    // 代理模式切换（仅管理员）
+    const proxyMode = document.getElementById('proxy-mode');
+    if (proxyMode) {
+        proxyMode.addEventListener('change', function(e) {
+            useProxy = e.target.checked;
+            const hint = document.getElementById('proxy-hint');
+            if (hint) {
+                if (useProxy) {
+                    hint.classList.remove('hidden');
+                } else {
+                    hint.classList.add('hidden');
+                }
+            }
+        });
+    }
+
+    // iframe加载事件
+    const iframe = document.getElementById('webview-frame');
+    iframe.addEventListener('load', function() {
+        document.getElementById('webview-loading').classList.add('hidden');
+    });
+
+    iframe.addEventListener('error', function() {
+        document.getElementById('webview-loading').classList.add('hidden');
+        showErrorWithProxyOption('iframe加载失败');
+    });
+    
+    // 检测连接错误（通过定时检查）
+    setInterval(checkIframeError, 3000);
+});
+
+// 检测iframe是否加载失败
+function checkIframeError() {
+    const iframe = document.getElementById('webview-frame');
+    const loading = document.getElementById('webview-loading');
+    
+    // 如果正在加载且iframe内容为空，可能是连接被拒绝
+    if (!loading.classList.contains('hidden') && iframe.src && iframe.src !== 'about:blank') {
+        try {
+            // 尝试访问iframe内容，如果跨域会报错
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+            if (iframeDoc && iframeDoc.body && iframeDoc.body.innerHTML === '') {
+                // 空内容，可能是加载失败
+                loading.classList.add('hidden');
+                if (!useProxy) {
+                    showErrorWithProxyOption('连接被拒绝，目标服务可能不允许嵌入，请尝试使用代理模式');
+                }
+            }
+        } catch (e) {
+            // 跨域错误，说明iframe加载了内容（这是正常的）
+            loading.classList.add('hidden');
+        }
+    }
+}
+
+// 加载当前用户信息
+async function loadCurrentUser() {
+    try {
+        const response = await fetch('/api/current-user', {
+            credentials: 'include'
+        });
+        if (response.ok) {
+            const data = await response.json();
+            if (data.logged_in) {
+                currentUser = data;
+            }
+        }
+    } catch (error) {
+        console.error('加载用户信息失败:', error);
+    }
+}
+
+// 检查是否是管理员
+function isAdmin() {
+    return currentUser && currentUser.user_type === 'admin';
+}
+
+// 根据用户角色更新UI
+function updateUIForUserRole() {
+    const adminToolbar = document.getElementById('admin-toolbar');
+    
+    if (isAdmin()) {
+        // 管理员：显示完整工具栏
+        adminToolbar.style.display = 'block';
+    } else {
+        // 普通用户：隐藏所有工具栏
+        adminToolbar.style.display = 'none';
+    }
+}
+
+// 加载网页
+function loadWebview() {
+    const urlInput = document.getElementById('webview-url');
+    let url;
+    
+    if (urlInput) {
+        // 管理员：从输入框获取URL
+        url = urlInput.value.trim();
+    } else {
+        // 普通用户：使用默认URL
+        url = defaultUrl;
+    }
+    
+    if (!url) {
+        if (isAdmin()) {
+            showToast('请输入网址', 'warning');
+        } else {
+            showToast('管理员未设置默认网址', 'warning');
+        }
+        return;
+    }
+
+    // 自动添加 http:// 前缀
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'http://' + url;
+        if (urlInput) {
+            urlInput.value = url;
+        }
+    }
+
+    const iframe = document.getElementById('webview-frame');
+    const emptyState = document.getElementById('webview-empty');
+    const loading = document.getElementById('webview-loading');
+    
+    // 保存当前URL用于重试
+    lastFailedUrl = url;
+
+    emptyState.classList.add('hidden');
+    loading.classList.remove('hidden');
+    hideError();
+
+    // 根据是否使用代理模式设置src
+    try {
+        if (useProxy) {
+            // 使用代理模式
+            const encodedUrl = encodeURIComponent(url);
+            iframe.src = '/api/webview/proxy?url=' + encodedUrl;
+        } else {
+            // 直接加载
+            iframe.src = url;
+        }
+        
+        // 设置超时检测
+        setTimeout(() => {
+            if (loading.classList.contains('hidden') === false) {
+                loading.classList.add('hidden');
+                // 如果还在加载中，可能是跨域问题
+                if (!useProxy) {
+                    // 检测是否真的是加载失败
+                    try {
+                        const iframeDoc = iframe.contentDocument;
+                        if (!iframeDoc || iframeDoc.body.innerHTML === '') {
+                            showErrorWithProxyOption('页面加载超时或连接被拒绝');
+                        }
+                    } catch (e) {
+                        // 跨域错误，说明加载了内容
+                    }
+                }
+            }
+        }, 8000);
+    } catch (error) {
+        loading.classList.add('hidden');
+        showErrorWithProxyOption('加载失败: ' + error.message);
+    }
+}
+
+// 刷新网页
+function refreshWebview() {
+    const iframe = document.getElementById('webview-frame');
+    
+    if (!iframe.src || iframe.src === 'about:blank') {
+        showToast('请先加载一个网页', 'warning');
+        return;
+    }
+
+    document.getElementById('webview-loading').classList.remove('hidden');
+    
+    // 检查是否在代理模式下
+    if (iframe.src.includes('/api/webview/proxy')) {
+        // 代理模式下重新设置src
+        if (isAdmin()) {
+            loadWebview();
+        } else {
+            // 普通用户直接使用默认URL刷新
+            const urlDisplay = document.getElementById('current-url-display').textContent;
+            if (defaultUrl) {
+                const encodedUrl = encodeURIComponent(defaultUrl);
+                iframe.src = '/api/webview/proxy?url=' + encodedUrl;
+            }
+        }
+    } else {
+        iframe.contentWindow.location.reload();
+    }
+}
+
+// 保存默认URL
+async function saveDefaultUrl() {
+    const url = document.getElementById('webview-url').value.trim();
+    
+    if (!url) {
+        showToast('请先输入要保存的网址', 'warning');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/webview/default-url', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify({ url: url })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+                showToast('默认网址保存成功', 'success');
+                defaultUrl = url;
+                document.getElementById('default-url-hint').classList.remove('hidden');
+            } else {
+                showToast(data.message || '保存失败', 'error');
+            }
+        } else {
+            showToast('保存失败', 'error');
+        }
+    } catch (error) {
+        console.error('保存默认URL失败:', error);
+        showToast('保存失败: ' + error.message, 'error');
+    }
+}
+
+// 设置示例URL
+function setExampleUrl(url) {
+    document.getElementById('webview-url').value = url;
+    loadWebview();
+}
+
+// 显示错误（带代理选项）
+function showErrorWithProxyOption(message) {
+    document.getElementById('error-message').textContent = message;
+    
+    // 如果不是代理模式，显示代理建议
+    if (!useProxy) {
+        document.getElementById('proxy-suggestion').classList.remove('hidden');
+        document.getElementById('retry-proxy-btn').classList.remove('hidden');
+    } else {
+        document.getElementById('proxy-suggestion').classList.add('hidden');
+        document.getElementById('retry-proxy-btn').classList.add('hidden');
+    }
+    
+    document.getElementById('webview-error').classList.remove('hidden');
+}
+
+// 显示错误
+function showError(message) {
+    document.getElementById('error-message').textContent = message;
+    document.getElementById('proxy-suggestion').classList.add('hidden');
+    document.getElementById('retry-proxy-btn').classList.add('hidden');
+    document.getElementById('webview-error').classList.remove('hidden');
+}
+
+// 隐藏错误
+function hideError() {
+    document.getElementById('webview-error').classList.add('hidden');
+}
+
+// 使用代理模式重试
+function retryWithProxy() {
+    document.getElementById('proxy-mode').checked = true;
+    useProxy = true;
+    document.getElementById('proxy-hint').classList.remove('hidden');
+    
+    hideError();
+    
+    if (lastFailedUrl) {
+        document.getElementById('webview-url').value = lastFailedUrl;
+        loadWebview();
+    }
+}
+
+// Toast提示
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    const colors = {
+        success: 'bg-accent-500',
+        error: 'bg-danger-500',
+        warning: 'bg-warning-500',
+        info: 'bg-primary-500'
+    };
+    const icons = {
+        success: 'fa-check-circle',
+        error: 'fa-times-circle',
+        warning: 'fa-exclamation-circle',
+        info: 'fa-info-circle'
+    };
+    
+    toast.className = `fixed top-4 right-4 ${colors[type]} text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-3 z-50 animate-fade-in`;
+    toast.innerHTML = `
+        <i class="fas ${icons[type]}"></i>
+        <span>${message}</span>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.remove();
+    }, 3000);
+}
+</script>
+
+<style>
+@keyframes fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-fade-in {
+    animation: fade-in 0.3s ease-out;
+}
+</style>
+{% endblock %}
