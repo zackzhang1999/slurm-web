@@ -51,7 +51,7 @@
 
     <!-- 机柜列表容器 -->
     <div id="cabinets-container" class="flex-1 overflow-auto">
-        <div class="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5 gap-6">
             <!-- 机柜卡片将通过JavaScript动态生成 -->
         </div>
     </div>
@@ -427,6 +427,13 @@
     background: rgba(255,255,255,0.7);
     width: 6px;
     border-radius: 1px;
+}
+
+/* 超巨大屏幕(4K) - 5列布局 */
+@media (min-width: 1920px) {
+    .3xl\:grid-cols-5 {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
 }
 
 /* 空U位悬停效果 */

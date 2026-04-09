@@ -7,6 +7,30 @@
       "location": "\u5b66\u9662\u6570\u636e\u4e2d\u5fc3\u7b2c\u4e09\u6392",
       "created_at": "2026-04-08T16:22:28.840772",
       "updated_at": "2026-04-08T23:39:47.129824"
+    },
+    {
+      "id": "f657ca17-3972-4a83-a64f-71b45ecd458a",
+      "name": "A09",
+      "height": 42,
+      "location": "\u5b66\u9662\u6570\u636e\u4e2d\u5fc3\u7b2c\u4e09\u6392",
+      "created_at": "2026-04-09T09:24:50.635762",
+      "updated_at": "2026-04-09T09:29:29.355877"
+    },
+    {
+      "id": "44383134-8726-4be6-961b-4fb788fb1d06",
+      "name": "A10",
+      "height": 42,
+      "location": "\u5b66\u9662\u6570\u636e\u4e2d\u5fc3\u7b2c\u4e09\u6392",
+      "created_at": "2026-04-09T09:24:53.886308",
+      "updated_at": "2026-04-09T09:31:54.062696"
+    },
+    {
+      "id": "453518bd-f1d3-4aae-a4ce-fed86b903313",
+      "name": "A11",
+      "height": 42,
+      "location": "\u5b66\u9662\u6570\u636e\u4e2d\u5fc3\u7b2c\u4e09\u6392",
+      "created_at": "2026-04-09T09:24:58.263732",
+      "updated_at": "2026-04-09T09:32:00.290612"
     }
   ],
   "servers": [
@@ -110,6 +134,47 @@
       "comment": "",
       "device_type": "switch",
       "created_at": "2026-04-08T23:39:01.119803"
+    },
+    {
+      "id": "bb0b3a86-c7c3-47f0-9d54-464165323cc3",
+      "cabinet_id": "f657ca17-3972-4a83-a64f-71b45ecd458a",
+      "name": "pdu-01",
+      "unit": 1,
+      "start_u": 1,
+      "comment": "3000w",
+      "device_type": "pdu",
+      "created_at": "2026-04-09T09:29:56.673861"
+    },
+    {
+      "id": "5edec69b-251d-4ed5-a0e2-ff3b236d6da6",
+      "cabinet_id": "f657ca17-3972-4a83-a64f-71b45ecd458a",
+      "name": "pdu-02",
+      "unit": 1,
+      "start_u": 3,
+      "comment": "3000w",
+      "device_type": "pdu",
+      "created_at": "2026-04-09T09:30:42.179236"
+    },
+    {
+      "id": "71e69d79-58c8-4765-8cf5-da8434d6fb95",
+      "cabinet_id": "f657ca17-3972-4a83-a64f-71b45ecd458a",
+      "name": "node07",
+      "unit": 4,
+      "start_u": 7,
+      "comment": "",
+      "device_type": "server",
+      "created_at": "2026-04-09T09:30:56.508865",
+      "updated_at": "2026-04-09T09:31:01.139467"
+    },
+    {
+      "id": "fe8f14d4-5cf0-491e-aa93-2153112f5b6c",
+      "cabinet_id": "f657ca17-3972-4a83-a64f-71b45ecd458a",
+      "name": "node08",
+      "unit": 4,
+      "start_u": 12,
+      "comment": "",
+      "device_type": "server",
+      "created_at": "2026-04-09T09:31:09.810627"
     }
   ]
 }
